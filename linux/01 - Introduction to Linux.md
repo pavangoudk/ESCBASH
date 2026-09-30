@@ -321,7 +321,3 @@ The commands in this lesson answer those questions:
 
 Learn these commands well. They are the foundation for everything that comes next.
 
-##### **Follow-Ups:**
-
-- Turn these notes into a quick revision sheet
-- Create practice exercises for each Linux command
