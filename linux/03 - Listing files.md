@@ -11,7 +11,7 @@
 Example:
 
 ```
-Bash
+
 ls
 ls /etc
 ls -l /etc
@@ -50,7 +50,7 @@ For now, focus on:
 Files and folders whose names begin with `.` are hidden by default.
 
 ```
-Bash
+
 ls
 ls -a
 ```
@@ -62,7 +62,7 @@ Common dotfiles and folders:
 
 | Item | Purpose |
 | --- | --- |
-| `.bashrc` | Shell startup configuration |
+| `.rc` | Shell startup configuration |
 | `.ssh/` | SSH keys and known hosts |
 | `.aws/` | AWS configuration and credentials |
 | `.kube/` | Kubernetes configuration |
@@ -83,7 +83,7 @@ Common dotfiles and folders:
 The commonly used command is:
 
 ```
-Bash
+
 ls -lah
 ```
 
@@ -96,7 +96,7 @@ This means:
 To inspect your home directory:
 
 ```
-Bash
+
 ls -lah ~
 ```
 
@@ -108,7 +108,7 @@ Here, `~` represents your home directory.
 A pipe, written as `|`, sends the output of one command into another command.
 
 ```
-Bash
+
 ls /etc | wc -l
 ```
 
@@ -126,7 +126,7 @@ This command:
 `grep` keeps only lines that match a pattern.
 
 ```
-Bash
+
 ls -a ~ | grep '^\.'
 ```
 
@@ -144,7 +144,7 @@ The pattern `^\.` means:
 # 
 
 ```
-Bash
+
 ls --help
 ```
 
@@ -154,7 +154,7 @@ ls --help
 
 # 
 ```
-Bash
+
 man ls
 ```
 
