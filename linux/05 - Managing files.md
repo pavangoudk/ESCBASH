@@ -1,4 +1,4 @@
-#Creating, Copying, Moving, and Removing Files — Notes
+# Creating, Copying, Moving, and Removing Files — Notes
 
 ## 1. Creating files with `touch`
 
