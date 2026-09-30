@@ -16,8 +16,6 @@ Use `cat` for short files. For long files, the output may fill the terminal too 
 `head` displays the first 10 lines of a file by default.
 
 ```
-
-
 head /etc/os-release
 head -n 3 /etc/os-release
 ```
@@ -52,8 +50,6 @@ wc -l /etc/passwd
 You can combine `wc -l` with another command using a pipe:
 
 ```
-
-
 ls /etc | wc -l
 ```
 
