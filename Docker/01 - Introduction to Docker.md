@@ -20,20 +20,9 @@ A good way to picture it: think of shipping goods across the world. A shipping c
 
 Here is the same idea as a picture. One container, built once, runs unchanged on three very different machines:
 
-```
 
-                             --------------------------------
-                                Container
-                                your program + its exact
-                                versions, libraries, settings
-                            -----------------------------------
+<img width="473" height="194" alt="image" src="https://github.com/user-attachments/assets/9b7a895a-4ebb-4f76-ad58-4ab6774028f0" />
 
-runs the same                    runs the same                         runs the same
-
-Your laptop                      A friend's computer                   Company server
-
-
-```
 ## Why so many people use it
 
 This one idea - "package it once, run it anywhere" - turns out to be useful everywhere in modern software:
@@ -71,15 +60,9 @@ And this is not just for big servers. Install Docker on your own laptop and you 
 ## A simple way to picture it
 
 A VM is like building a separate house for every program: each one gets its own foundation, plumbing, and walls. A container is like renting a locked room inside one shared building: you get your own private space, but you share the building's foundation and plumbing with everyone else.
-```
-Containers: light, start instantly         Virtual machines: heavy, slow to boot          
 
-app + app + app                           app + app + app
+<img width="459" height="364" alt="image" src="https://github.com/user-attachments/assets/71db7470-a983-4581-9da5-002a9806623a" />
 
-shared host OS                            a full OS per app  3 full OSes host OS + hypervisor
-
-hardware                                  hardware
-```
 Both give a program its own isolated space. The container just does it without dragging a whole extra operating system along, which is why Docker took over.
 
 ## Terms this node introduces
@@ -112,20 +95,8 @@ A **container** is what you get when you start an image. Docker takes the image 
 
 Just like you can cook the same recipe many times, you can start many containers from one image:
 
-run
+<img width="417" height="155" alt="image" src="https://github.com/user-attachments/assets/9bcbfcbc-c058-43e9-88af-7692cb2b1825" />
 
-run
-
-run
-
-nginx image
-one recipe on disk
-
-container #1
-
-container #2
-
-container #3
 
 Each container is separate from the others. Stopping or deleting one does not affect the image or the other containers - just like throwing away one dish does not touch the recipe or the other dishes.
 
