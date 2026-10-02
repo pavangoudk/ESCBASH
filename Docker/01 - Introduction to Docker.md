@@ -71,26 +71,15 @@ And this is not just for big servers. Install Docker on your own laptop and you 
 ## A simple way to picture it
 
 A VM is like building a separate house for every program: each one gets its own foundation, plumbing, and walls. A container is like renting a locked room inside one shared building: you get your own private space, but you share the building's foundation and plumbing with everyone else.
+```
+Containers: light, start instantly         Virtual machines: heavy, slow to boot          
 
-Containers: light, start instantly
+app + app + app                           app + app + app
 
-app + app + app
+shared host OS                            a full OS per app  3 full OSes host OS + hypervisor
 
-shared host OS
-
-hardware
-
-Virtual machines: heavy, slow to boot
-
-app + app + app
-
-a full OS per app
-3 full OSes
-
-host OS + hypervisor
-
-hardware
-
+hardware                                  hardware
+```
 Both give a program its own isolated space. The container just does it without dragging a whole extra operating system along, which is why Docker took over.
 
 ## Terms this node introduces
