@@ -1,98 +1,83 @@
-# Reading Text Files in Linux — Notes
+# cat, head, tail, and wc
 
-## 1. `cat`: print an entire file
+Four commands do most of the work when you need to look at a text file.
 
-`cat` displays the complete contents of a text file in the terminal.
+## cat: print the whole thing
+
+`cat` prints a file's contents to the terminal.
 
 ```
 cat /etc/hostname
 cat /etc/os-release
 ```
 
-Use `cat` for short files. For long files, the output may fill the terminal too quickly.
+Great for short files. For anything long, use one of the tools below, otherwise the terminal fills up faster than you can scroll.
 
-## 2. `head`: view the beginning
+## head and tail: peek at either end
 
-`head` displays the first 10 lines of a file by default.
+`head` prints the first 10 lines by default. `tail` prints the last 10. Both take `-n` to change the count.
 
 ```
 head /etc/os-release
-head -n 3 /etc/os-release
+head -n 3 /etc/os-release      # first 3 lines only
+tail -n 5 /etc/passwd          # last 5 lines
 ```
 
-- `head`: shows the first 10 lines.
-- `head -n 3`: shows the first 3 lines.
+These are perfect for log files where the interesting bit is usually near the top (startup) or bottom (most recent).
 
-This is useful for checking file headers, startup information, or the beginning of a log.
+## wc: count lines, words, bytes
 
-## 3. `tail`: view the end
-
-`tail` displays the last 10 lines of a file by default.
-
-```
-tail /etc/passwd
-tail -n 5 /etc/passwd
-```
-
-- `tail`: shows the last 10 lines.
-- `tail -n 5`: shows the last 5 lines.
-
-The end of a log often contains the newest events, so `tail` is especially useful for log investigation.
-
-## 4. `wc`: count content
-
-`wc` counts lines, words, and bytes. The option used most often is `-l`, which counts lines.
+`wc` counts. Most of the time you'll use `-l` for line count.
 
 ```
 wc -l /etc/passwd
 ```
 
-You can combine `wc -l` with another command using a pipe:
+Piped from another command, `wc -l` becomes "how many things did that produce":
 
 ```
-ls /etc | wc -l
+ls /etc | wc -l           # how many entries live in /etc
 ```
 
-This means:
+You already used that trick in the previous topic.
 
-1. List the entries in `/etc`.
-2. Send the output to `wc`.
-3. Count the lines.
+---
 
-## 5. `less`: read large files safely
+# less for big files
 
-`less` opens a file in a scrollable viewer. It is better than `cat` for large files because it does not flood the terminal with all the content at once.
+`cat` prints everything at once, which is a problem when "everything" is a million lines of log. `less` opens the file in a scrollable viewer that only loads what you need.
 
 ```
 less /etc/services
 ```
 
-### Useful `less` controls
+You're now inside the viewer, not back at the shell. The keys you'll actually use:
 
-| Key | Action |
-| --- | --- |
-| `Space` or `f` | Move one page down |
-| `b` | Move one page up |
-| `g` | Go to the beginning |
-| `G` | Go to the end |
-| `/word` | Search forward for `word` |
-| `n` | Find the next match |
-| `?word` | Search backward for `word` |
-| `q` | Quit and return to the shell |
+- **Space** or **f** - page down.
+- **b** - page up.
+- **g** - jump to the top.
+- **G** (capital) - jump to the bottom.
+- **/word** - search forward for `word`. Press **n** for the next match.
+- **?word** - search backward.
+- **q** - quit and return to the shell.
 
-To open a file directly at its end:
+You can also jump straight to the bottom of a file when opening it:
 
 ```
 less +G /var/log/dpkg.log
 ```
 
-Use `less` whenever you are unsure how large a file is.
+When you don't know whether a file is big, reach for `less` rather than `cat`. It'll open a 2 GB file instantly, whereas `cat` would spend minutes flooding your terminal.
 
-## 6. `tail -f`: follow a live log
+---
 
-`tail -f` keeps watching a file and prints new lines as they are added. This is useful for monitoring service logs in real time.
+# Following a log with tail -f
 
-First start the web server and generate a few requests:
+On any real server, watching a log update in real time is a daily activity. That's what `tail -f` is for.
+
+This lab has a real nginx web server, and every request it serves lands in its access log. Nothing creates that log until nginx is running, and the server is still coming up in the first seconds of a session, so start it before you go looking. Without that, `tail` answers `No such file or directory`, which is the file telling you the truth: it is not there yet.
+
+Start the server, give it a couple of requests so the log has lines, then follow it:
 
 ```
 systemctl start nginx
@@ -101,59 +86,26 @@ curl -s localhost > /dev/null
 tail -f /var/log/nginx/access.log
 ```
 
-- `systemctl start nginx`: starts the Nginx service.
-- `curl -s localhost`: sends a quiet request to the local web server.
-- `tail -f`: continuously follows the access log.
+`systemctl start` on a server that is already running changes nothing, so it is always safe to run first.
 
-Starting an already-running service normally changes nothing, so running the start command first is generally safe.
+`-f` (for "follow") keeps the command running and prints each new line the moment it's appended to the file. When something breaks in production, this is where the truth lives.
 
-Press `Ctrl+C` to stop following the file.
-
-## 7. Useful `tail` variations
-
-### Show recent lines, then continue following
+Two variations worth knowing:
 
 ```
+# print the last 100 lines, then follow
 tail -n 100 -f /var/log/nginx/access.log
-```
 
-This displays the last 100 lines and then waits for new entries.
-
-### Continue across log rotation
-
-```
+# keep watching even if the file gets rotated
 tail -F /var/log/nginx/access.log
 ```
 
-- `-f`: follows the current file.
-- `-F`: follows the file even when it is renamed and replaced during log rotation.
+`-n 100 -f` is useful when you want context before the live stream starts. `-F` (capital) keeps watching a file across log rotation, when the log gets renamed and a fresh one takes its place.
 
-## 8. Common system logs
+Press **Ctrl+C** to stop following and return to the shell.
 
-Many systems use:
+On most servers the system-wide log is `/var/log/syslog` (or, on systemd machines, `journalctl -f`), and tailing it works the same way.
 
-```
-tail -f /var/log/syslog
-```
+If you're ever debugging a service and someone says "just tail the log", this is what they mean.
 
-On systems that use `systemd`, live system logs are often viewed with:
-
-```
-journalctl -f
-```
-
-## 9. Command selection guide
-
-| Goal | Command |
-| --- | --- |
-| Print a short file completely | `cat file` |
-| View the first lines | `head file` |
-| View the last lines | `tail file` |
-| Count lines | `wc -l file` |
-| Read a large file interactively | `less file` |
-| Watch a log update | `tail -f file` |
-| Watch a rotated log | `tail -F file` |
-
-## Key takeaway
-
-Use `cat` for short files, `head` and `tail` to inspect either end, `wc -l` to count lines, and `less` for large files. Use `tail -f` when troubleshooting a service or watching a log in real time.
+---
