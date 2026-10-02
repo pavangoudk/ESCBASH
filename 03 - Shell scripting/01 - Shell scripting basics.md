@@ -1,6 +1,6 @@
 # What is a shell script
 
-LessonA shell script is a plain text file that holds a list of shell commands, one per line. Instead of typing each command at the terminal, you write them all in a file and run the file. The shell reads it top to bottom and runs each command in order, just as if you had typed them.
+A shell script is a plain text file that holds a list of shell commands, one per line. Instead of typing each command at the terminal, you write them all in a file and run the file. The shell reads it top to bottom and runs each command in order, just as if you had typed them.
 
 Every line is a normal command you already know. Why bother? You often need to run the same set of commands more than once, and typing them out each time is slow and error-prone. Put them in a script once, and run the whole thing any time with a single command.
 
@@ -16,7 +16,7 @@ Three things to notice:
 
 - The first line, starting with `#!`, is the **shebang**. It tells Linux which program should run this file. `#!/bin/bash` says "run this with bash."
 - The line starting with `#` (any `#` other than the shebang) is a **comment**. Comments are little notes for humans reading the script. The shell ignores everything from a `#` to the end of that line, so a comment never runs as a command.
-- `echo` prints text to the terminal. Here it prints `hello, DevOps`. You will use `echo` a lot in the coming lessons, so just remember for now: `echo` writes text to the screen.
+- `echo` prints text to the terminal. Here it prints `hello, DevOps`. You will use `echo` a lot in the coming s, so just remember for now: `echo` writes text to the screen.
 
 ## File extension is convention only
 
@@ -28,7 +28,7 @@ That's the whole reality: a shell script is a text file with a shebang that Linu
 
 # Making a script executable and running it
 
-LessonA file being full of commands and a file being allowed to run are two separate things. Saving a script is not enough; you have to grant permissions to make it executable. In this lesson you grant that permission, then see the ways to actually run it.
+A file being full of commands and a file being allowed to run are two separate things. Saving a script is not enough; you have to grant permissions to make it executable. In this  you grant that permission, then see the ways to actually run it.
 
 Create a small script to work with:
 
