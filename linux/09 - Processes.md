@@ -1,236 +1,304 @@
-# Linux Process Management Notes
+# What is a process
 
-## 1. What is a process?
+LessonA process is a running program. Every command you type spawns one. Every service on the machine is one. Some are short (`ls` starts, prints, exits, gone), some run for weeks (nginx, sshd, a database).
 
-A **process** is a running program.
-
-Examples:
-
-- `ls` runs briefly, prints output, and exits.
-- `nginx`, `sshd`, and databases may run continuously.
-- Every command you execute creates a process.
-
-Each process has:
-
-- An owner
-- A unique process ID, or **PID**
-- CPU and memory usage
-- A command that started it
-- A parent process
-
-## 2. Listing processes
-
-Use `ps aux` to display processes from across the system.
-
-Important columns:
-
-| Column | Meaning |
-| --- | --- |
-| `USER` | User who owns the process |
-| `PID` | Unique process ID |
-| `%CPU` | CPU usage |
-| `%MEM` | Memory usage |
-| `COMMAND` | Command that started the process |
-
-PID `1` is special. It is the first userspace process started by the kernel and is the ancestor of most other processes.
+## Listing processes
 
 ```
 ps aux
-ps -ef
-ps -ef | head
-echo $$
 ```
 
-`echo $$` displays the PID of the current shell.
+Prints every process on the machine. A couple of rows look like this:
 
-## 3. PIDs and parent processes
+```
+USER   PID %CPU %MEM    VSZ   RSS TTY   STAT START   TIME COMMAND
+root     1  0.0  0.4 168944 12016 ?     Ss   09:12   0:01 /sbin/init
+root   533  0.0  0.2  55208  5400 ?     Ss   09:12   0:00 nginx: master process
+```
 
-Start a temporary process in the background:
+The columns that matter to a DevOps engineer:
+
+- `USER` - who owns the process
+- `PID` - process ID, unique per process
+- `%CPU` and `%MEM` - resources it's using
+- `COMMAND` - the command line that launched it
+
+Read the second row left to right: the user `root` owns it, its PID is `1`, it's barely touching CPU or memory, and it was launched from `/sbin/init`. That process with PID `1` is special, it's the first thing the kernel starts and the ancestor of everything else.
+
+## Everything is referred to by PID
+
+Every process has a PID, and that number is how you refer to it later. Start a throwaway process so you have a real PID to work with:
 
 ```
 sleep 300 &
 ```
 
-The shell displays a job number and PID. Use the PID to target that specific process:
+The shell prints something like `[1] 4821`. That second number is the PID. Now you can stop that exact process by its number:
 
 ```
-kill <PID>
+kill 4821
 ```
 
-Every process has a parent process. `ps -ef` includes a `PPID` column showing the parent PID.
+Use whatever number your shell actually printed, not `4821`. Your own shell has a PID too. Run `echo $$` to see it.
 
-Understanding parent-child relationships helps identify:
+## Parent processes
 
-- Which service started a process
-- Why a process keeps returning
-- Which supervisor may be restarting a process
+Every process was started by another process, called its **parent**. `ps -ef` shows a `PPID` (parent PID) column:
 
-## 4. Finding processes
+```
+ps -ef | head
+```
 
-### Search with `ps` and `grep`
+When you run a command in ,  is the parent, your command is the child. This matters when you're chasing which service started which helper, or when a process seems to keep coming back (its parent is respawning it).
+
+
+
+# 
+Finding and stopping processes
+
+Lesson## Finding by name
+
+Two patterns cover most cases.
+
+The everyday move:
 
 ```
 ps aux | grep nginx
+```
+
+You'll see one line per matching process plus the grep itself (because your grep also has "nginx" in it). Add `| grep -v grep` to drop the noise:
+
+```
 ps aux | grep nginx | grep -v grep
 ```
 
-The first command may show the `grep` command itself because it contains the search term.
-
-### Use `pgrep`
+Cleaner alternative:
 
 ```
-pgrep nginx
-pgrep -a nginx
+pgrep nginx              # just PIDs
+pgrep -a nginx           # PIDs plus command lines
 ```
 
-- `pgrep nginx` displays matching PIDs.
-- `pgrep -a nginx` displays PIDs and command lines.
+`pgrep` prints only the PIDs, which pairs nicely with commands that take PIDs as input.
 
-### Use `pidof`
+`pidof` does nearly the same job, matching on the exact program name rather than a pattern:
 
 ```
 pidof nginx
 ```
 
-`pidof` searches for the exact program name, while `pgrep` supports pattern matching.
+It prints the matching PIDs on a single line. Reach for `pgrep` when you want pattern matching, `pidof` when you know the exact name.
 
-## 5. Monitoring processes with `top`
+## The live view: top
 
-`ps` gives a snapshot. `top` provides a continuously updating view.
+`ps` is a snapshot. `top` updates continuously, sorted by CPU by default:
 
 ```
 top
 ```
 
-Useful keys inside `top`:
+Useful keys inside `top`: `q` to quit, `M` to sort by memory, `P` to sort by CPU. `htop` is a nicer, colored version, worth installing on any machine you spend real time on.
 
-- `q` — quit
-- `M` — sort by memory usage
-- `P` — sort by CPU usage
+## Stopping a process
 
-`htop` is a more user-friendly alternative when installed.
-
-## 6. Stopping processes with signals
-
-The `kill` command sends a signal to a process.
+`kill` sends a **signal** to a process. Different signals mean different things.
 
 ```
-kill <PID>
-kill -9 <PID>
+kill 1234                # SIGTERM: "please stop"
+kill -9 1234             # SIGKILL: "stop now, no cleanup"
 ```
 
-### Important signals
+## Signals worth knowing
 
-| Signal | Number | Meaning |
+| Signal | Number | What it means |
 | --- | --- | --- |
-| `SIGTERM` | 15 | Request a clean shutdown |
-| `SIGKILL` | 9 | Force immediate termination |
-| `SIGHUP` | 1 | Often reloads configuration |
-| `SIGINT` | 2 | Interrupt; sent by `Ctrl+C` |
+| SIGTERM | 15 | Please shut down cleanly. This is the default. |
+| SIGKILL | 9 | Force immediate stop. No cleanup possible. |
+| SIGHUP | 1 | Reload config (many daemons treat it that way). |
+| SIGINT | 2 | Interrupt. This is what Ctrl+C sends. |
 
-### Recommended approach
+Rule of thumb: try plain `kill PID` first (SIGTERM), wait a couple of seconds, only reach for `kill -9` if the process is truly stuck. A SIGTERM lets the process close its files and flush its buffers before exiting. SIGKILL gives it no chance, which can leave half-written files behind.
 
-1. Try `kill <PID>` first.
-2. Wait briefly for graceful shutdown.
-3. Use `kill -9 <PID>` only if the process is stuck.
+## Killing by name
 
-`SIGTERM` gives the process time to close files and flush data. `SIGKILL` provides no cleanup opportunity.
-
-## 7. Killing processes by name
-
-```
-pkill sleep
-killall sleep
-```
-
-- `pkill` matches a pattern.
-- `killall` matches the exact command name.
-
-These commands may stop every matching process, including processes started by other users or scripts. Prefer an exact PID when possible.
-
-## 8. Inspecting one process
-
-Use `ps -p` when you already know the PID:
-
-```
-ps -p <PID>
-ps -p "$(pgrep myapp)"
-```
-
-Command substitution uses `$(...)` to place one command’s output inside another command.
-
-Examples:
-
-```
-kill "$(pgrep myapp)"
-ps -p "$(cat /var/run/app.pid)"
-```
-
-Check the resulting PID before issuing destructive commands, especially when the search could return multiple processes.
-
-## 9. Background jobs
-
-Add `&` to run a command in the background:
+Looking up a PID just to kill it gets tedious. `pkill` and `killall` match by name and signal every process that matches, in one step. Start a couple of throwaway processes so you can watch it work:
 
 ```
 sleep 300 &
+sleep 300 &
+```
+
+`pkill` matches on a pattern, the same way `pgrep` does:
+
+```
+pkill sleep
+```
+
+`killall` matches the exact command name instead:
+
+```
+killall sleep
+```
+
+Both take the same signal flags as `kill`, so `pkill -9 sleep` force-kills every match. The convenience has a downside. `pkill sleep` stops every sleep on the machine, including ones another user or a script started, so when you already know the exact PID, prefer that. Reach for `pkill` and `killall` when you genuinely want every process of a given name gone.
+
+## Inspecting a single process with ps -p
+
+`ps aux` prints every process. If you already have a PID and want details about only that one, use `ps -p`:
+
+```
+ps -p 1234                    # show only PID 1234
+```
+
+Combine it with `pgrep` to look up a name and inspect the match in one line, using the command-substitution pattern below.
+
+## Command substitution with $(...)
+
+`$(command)` runs `command` in a subshell and substitutes its output into the surrounding line before the shell runs it. This is how you chain commands that don't accept pipes as arguments (`kill` and `ps -p` both take a PID as an argument, not on stdin).
+
+```
+kill $(pgrep myapp)              # kill the PID that pgrep printed
+ps -p $(cat /var/run/app.pid)    # inspect the PID stored in a file
+```
+
+You'll see `$(...)` everywhere. Anywhere a command needs the OUTPUT of another command as an ARGUMENT, this is the pattern.
+
+
+
+# 
+Background and persistent jobs
+
+LessonSometimes you want a command to keep running while you get your shell back. Two mechanisms cover almost every case.
+
+## Ampersand: run in the background
+
+Append `&` to any command:
+
+```
+sleep 300 &
+```
+
+The command starts, and the shell immediately hands you the prompt back. You'll see something like `[1] 12345`, which is the job number and the PID.
+
+### A never-ending sleep
+
+`sleep` also accepts the word `infinity` in place of a number:
+
+```
+sleep infinity
+```
+
+That call never returns on its own, so press Ctrl+C to stop it and get your prompt back. It's the standard way to keep a script or a container running until something else stops it. You'll see it inside minimal Docker images and in placeholder systemd services.
+
+See your background jobs:
+
+```
 jobs
-fg %1
 ```
 
-Key concepts:
-
-- `&` starts a background job.
-- `jobs` lists jobs belonging to the current shell.
-- `fg %1` brings job 1 to the foreground.
-- `fg` brings the most recent job forward.
-- `Ctrl+Z` pauses a foreground process.
-- `bg` resumes a paused process in the background.
-
-A background job is still attached to the shell and may end when the shell exits.
-
-## 10. Keeping jobs alive after logout
-
-Use `nohup` for a basic task that should survive logout:
+Bring one back to the foreground:
 
 ```
-nohup sleep 300 &
+fg %1              # by job number
+fg                 # most recent one
 ```
 
-`nohup`:
+Pause a foreground command and push it to the background:
 
-- Detaches the process from the shell
-- Allows it to continue after logout
-- Redirects terminal output to `nohup.out` by default
+```
+# while the command is running:
+Ctrl+Z             # pauses it
+bg                 # resumes it in the background
+```
 
-For automatic restarts, logging, dependency management, and startup ordering, use a service manager such as `systemd`.
+## Background jobs die with your shell
 
-## Quick reference
+A background job is still a child of your shell. Close the SSH session and the shell exits, taking its children with it. That's fine for a `sleep` while you work, disastrous for a two-hour backup.
 
-| Goal | Command |
-| --- | --- |
-| List all processes | `ps aux` |
-| Show process hierarchy details | `ps -ef` |
-| Find PIDs by pattern | `pgrep name` |
-| Find exact program PIDs | `pidof name` |
-| Monitor continuously | `top` |
-| Gracefully stop a process | `kill PID` |
-| Force-stop a process | `kill -9 PID` |
-| Inspect one PID | `ps -p PID` |
-| List shell jobs | `jobs` |
-| Resume a job in foreground | `fg %job_number` |
-| Resume a paused job in background | `bg` |
-| Survive logout | `nohup command &` |
+## nohup: survive logout
 
-**Core mental model:**
+`nohup` (short for "no hangup") lets a command outlive the shell:
 
-- `PID` identifies a process.
-- `ps` shows process details.
-- `kill` sends signals.
-- `&` runs a job in the background.
-- `nohup` helps a job survive logout.
+```
+nohup sleep 300 &        # stand-in for a long-running task
+```
 
-##### **Follow-Ups:**
+Two things happen. The process is detached from your shell, and output that would have gone to the terminal is redirected to a file called `nohup.out` in the current directory. You can log out and the task keeps going.
 
-- Give me a process-management quiz
-- Explain systemd service management next
+Find it again later:
+
+```
+ps aux | grep sleep
+```
+
+For anything more sophisticated (auto-restart, log rotation, startup ordering), you'll want `systemd`, which gets its own topic later.
+
+
+
+# Background and persistent jobs
+
+LessonSometimes you want a command to keep running while you get your shell back. Two mechanisms cover almost every case.
+
+## Ampersand: run in the background
+
+Append `&` to any command:
+
+```
+sleep 300 &
+```
+
+The command starts, and the shell immediately hands you the prompt back. You'll see something like `[1] 12345`, which is the job number and the PID.
+
+### A never-ending sleep
+
+`sleep` also accepts the word `infinity` in place of a number:
+
+```
+sleep infinity
+```
+
+That call never returns on its own, so press Ctrl+C to stop it and get your prompt back. It's the standard way to keep a script or a container running until something else stops it. You'll see it inside minimal Docker images and in placeholder systemd services.
+
+See your background jobs:
+
+```
+jobs
+```
+
+Bring one back to the foreground:
+
+```
+fg %1              # by job number
+fg                 # most recent one
+```
+
+Pause a foreground command and push it to the background:
+
+```
+# while the command is running:
+Ctrl+Z             # pauses it
+bg                 # resumes it in the background
+```
+
+## Background jobs die with your shell
+
+A background job is still a child of your shell. Close the SSH session and the shell exits, taking its children with it. That's fine for a `sleep` while you work, disastrous for a two-hour backup.
+
+## nohup: survive logout
+
+`nohup` (short for "no hangup") lets a command outlive the shell:
+
+```
+nohup sleep 300 &        # stand-in for a long-running task
+```
+
+Two things happen. The process is detached from your shell, and output that would have gone to the terminal is redirected to a file called `nohup.out` in the current directory. You can log out and the task keeps going.
+
+Find it again later:
+
+```
+ps aux | grep sleep
+```
+
+For anything more sophisticated (auto-restart, log rotation, startup ordering), you'll want `systemd`, which gets its own topic later.
+
