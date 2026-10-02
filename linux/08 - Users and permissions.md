@@ -1,236 +1,273 @@
-# Linux Permissions and Ownership Notes
+# The ten characters
 
-## 1. Reading the ten-character permission string
+This topic is really about one string. When you run `ls -l`, every file answers with something like `-rw-r--r--`, and that string decides who is allowed to touch it.
 
-An `ls -l` entry may begin with:
+The trick is to stop reading it as ten characters. It's **one, then three, then three, then three**:
 
-`-rw-r--r--`
+```
+-    rw-    r--    r--
+↑    ↑      ↑      ↑
+type owner  group  other
+```
 
-Read it as:
+The first character is the file type — `-` for a regular file, `d` for a directory, `l` for a symlink. The nine after it are three identical triplets, one for each audience, and inside every triplet the same three slots appear in the same order: **r**ead, **w**rite, e**x**ecute, or a `-` where that permission is denied.
 
-`type | owner | group | other`
+That's the whole system. Everything else in this topic is a consequence of it.
 
-| Section | Meaning |
-| --- | --- |
-| First character | File type |
-| Next three characters | Owner permissions |
-| Next three characters | Group permissions |
-| Final three characters | Other users’ permissions |
+## The numbers are the same thing
 
-### File types
+Read is worth 4, write 2, execute 1. Add up one triplet and you get one digit, so three triplets become three digits — which is why `chmod 755` and `-rwxr-xr-x` are two spellings of the same thing.
 
-| Character | Meaning |
-| --- | --- |
-| `-` | Regular file |
-| `d` | Directory |
-| `l` | Symbolic link |
-| `c`, `b`, `s`, `p` | Special file types |
+Four modes cover almost everything you'll do:
 
-### Permission characters
-
-| Character | File meaning | Directory meaning |
+| Mode | Bits | Use case |
 | --- | --- | --- |
-| `r` | Read contents | List names |
-| `w` | Modify contents | Create, rename, or delete entries |
-| `x` | Execute | Enter/traverse the directory |
-| `-` | Permission denied | Permission denied |
+| 755 | `rwxr-xr-x` | Scripts and executables anyone can run |
+| 644 | `rw-r--r--` | Configs and text files anyone can read |
+| 700 | `rwx------` | A directory only the owner should enter |
+| 600 | `rw-------` | Secrets: SSH keys, API tokens, .env files |
 
-Example: `-rw-r--r--`
+## Why it bites
 
-- Regular file
-- Owner can read and write
-- Group can read
-- Others can read
-- No one except the owner can write
+SSH refuses to use a private key that anyone else on the machine can read. A key at `644` gets you `Permissions 0644 for '~/.ssh/id_rsa' are too open` and a rejected login — not because the key is wrong, but because four digits are. `chmod 600` on the key and `700` on `~/.ssh` fixes it.
 
-## 2. Numeric permission values
+The nodes that follow take each piece slowly: who users and groups are, how to read a long listing character by character, and how `chmod` and `chown` change what you just read.
 
-Permissions have numeric values:
 
-| Permission | Value |
+
+# Users and groups
+
+Every process on a Linux machine runs as some user. Every file belongs to a user. That's how the system decides who can read what.
+
+## Who am I
+
+You already met `whoami`. Its sibling `id` gives the fuller picture:
+
+```
+whoami          # just the username
+id              # username, user ID, primary group, secondary groups
+```
+
+A typical `id` output looks like `uid=0(root) gid=0(root) groups=0(root)`.
+
+## Users live in /etc/passwd
+
+Each user has one line in `/etc/passwd`, colon-separated:
+
+```
+username:x:UID:GID:full name:home directory:login shell
+root:x:0:0:root:/root:/bin/
+ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/
+```
+
+The `x` is a leftover from the days when the password hash lived there. Now hashes are in `/etc/shadow`, which only root can read.
+
+## Two kinds of user
+
+Regular users own their own home folder under `/home/<name>` and can run everyday commands. **root** is the superuser: UID 0, unrestricted, owns most of the system, and can undo anything.
+
+On production servers you almost never log in directly as root. You log in as yourself and use `sudo` for the moments when root permissions are actually needed.
+
+```
+sudo apt update             # run this one command as root
+sudo -i                     # start an interactive root shell
+```
+
+On this lab machine you're already root, so `sudo` is a no-op here. The habit still matters everywhere else.
+
+## Groups
+
+Groups let several users share access to a resource. Every user has one **primary group** (the GID in `/etc/passwd`) and can belong to any number of **secondary groups**, listed in `/etc/group`.
+
+Each group has one line there, in a similar colon-separated shape:
+
+```
+groupname:x:GID:comma,separated,members
+sudo:x:27:ubuntu
+```
+
+The last field lists the users who belong to the group as secondary members. The `ubuntu` user above is a member of `sudo`, and that membership is exactly what lets it run `sudo` commands.
+
+When you look at file ownership in the next node, you'll see both a user and a group next to each file.
+
+
+
+# Reading permissions in ls -l
+
+Time to unpack the column you've been ignoring since topic 3. Run:
+
+```
+ls -l /etc/hosts
+```
+
+You'll see something like:
+
+```
+-rw-r--r-- 1 root root 178 Feb 10 14:22 /etc/hosts
+```
+
+Focus on the first field: `-rw-r--r--`. Ten characters, three groups.
+
+## The first character: file type
+
+- `-` regular file
+- `d` directory
+- `l` symbolic link
+- `c`, `b`, `s`, `p` special files (you'll meet them later)
+
+## The next nine characters: three triplets
+
+Broken up into three groups of three:
+
+```
+rw- r-- r--
+```
+
+1. The **first** group is the **owner's** permissions.
+2. The **second** group is the **group's** permissions.
+3. The **third** group is **other** (everyone else's) permissions.
+
+Each triplet is three letters, read in the same order:
+
+- `r` - read the file (or list a directory)
+- `w` - write to the file (or create/delete entries in a directory)
+- `x` - execute the file (or `cd` into a directory)
+- `-` - permission denied for that slot
+
+So `-rw-r--r--` means: it's a regular file, owner can read and write, group can read only, everyone else can read only.
+
+## r/w/x on directories, briefly
+
+For directories, the letters mean something slightly different:
+
+- `r` - see the list of names inside.
+- `w` - create, rename, or delete entries.
+- `x` - enter the folder (`cd` into it) and access files by name.
+
+A directory with `r` but no `x` is a weird half-locked state where you can see the names but not actually reach the files. Almost every useful directory has both.
+
+## A directory in a real listing
+
+Make a folder and list it with the `-d` flag, which tells `ls` to describe the directory itself instead of its contents:
+
+```
+mkdir -p /root/demo
+ls -ld /root/demo
+```
+
+```
+drwxr-xr-x 2 root root 4096 Feb 10 14:22 /root/demo
+```
+
+Read `drwxr-xr-x` the same way, character by character. The first character is `d`, so it's a directory. Then `rwx` for the owner (root can list it, add or delete entries, and enter it), `r-x` for the group, and `r-x` for other. That `drwxr-xr-x` shape is what a normal directory looks like: the owner controls what's inside, and everyone else can look and enter but not change anything.
+
+## The owner and group columns
+
+Right after the permissions block, `ls -l` prints the owner and group:
+
+```
+-rw-r--r-- 1 root root 178 Feb 10 14:22 /etc/hosts
+            ^^^^ ^^^^
+            owner group
+```
+
+Reading permissions is now a two-step check: identify which triplet applies to you (are you the owner, in the group, or neither?), then look for r/w/x in that triplet.
+
+
+
+# chmod and chown
+
+Two commands let you change what you saw in the previous listing: `chmod` changes permissions, `chown` changes ownership.
+
+## chmod, the symbolic way
+
+Start with a file to practice on:
+
+```
+touch /root/report.txt
+ls -l /root/report.txt
+```
+
+A freshly created file starts at mode `644`:
+
+```
+-rw-r--r-- 1 root root 0 Feb 10 14:22 /root/report.txt
+```
+
+Symbolic notation reads like a mini-sentence: **who**, **operator**, **which permission**.
+
+Who: `u` (user/owner), `g` (group), `o` (other), `a` (all). Operator: `+` (add), `-` (remove), `=` (set exactly). Permission: `r`, `w`, `x`.
+
+Give the owner execute, then look at the file again:
+
+```
+chmod u+x /root/report.txt
+ls -l /root/report.txt
+```
+
+```
+-rwxr--r-- 1 root root 0 Feb 10 14:22 /root/report.txt
+```
+
+The owner triplet went from `rw-` to `rwx`, and nothing else moved. A few more shapes work the same way:
+
+```
+chmod g-w /root/report.txt      # remove write from group
+chmod o=r /root/report.txt      # set other to read only
+chmod a+r /root/report.txt      # give everyone read
+```
+
+Fine for one-off tweaks, but most DevOps engineers reach for the octal form instead.
+
+## chmod, the octal way
+
+The three triplets can be written as three digits. Each digit is the sum of read (4), write (2), and execute (1):
+
+| Digit | Meaning |
 | --- | --- |
-| Read (`r`) | 4 |
-| Write (`w`) | 2 |
-| Execute (`x`) | 1 |
+| 7 | rwx |
+| 6 | rw- |
+| 5 | r-x |
+| 4 | r-- |
+| 0 | --- |
 
-Add the values for each triplet:
+So this command, run on the same file:
 
-| Number | Permissions |
+```
+chmod 755 /root/report.txt
+ls -l /root/report.txt
+```
+
+sets owner `rwx`, group `r-x`, other `r-x`:
+
+```
+-rwxr-xr-x 1 root root 0 Feb 10 14:22 /root/report.txt
+```
+
+Three digits, one call, unambiguous.
+
+## Presets you'll type constantly
+
+| Mode | Use case |
 | --- | --- |
-| `7` | `rwx` |
-| `6` | `rw-` |
-| `5` | `r-x` |
-| `4` | `r--` |
-| `0` | `---` |
+| 755 | Scripts and executables anyone can run |
+| 644 | Configs and text files anyone can read |
+| 700 | Directory only the owner should enter |
+| 600 | Secrets: SSH keys, API tokens, .env files |
 
-For example, `755` means:
+Learn these four and you can set the right mode on 90% of files without thinking.
 
-- Owner: `7` → `rwx`
-- Group: `5` → `r-x`
-- Other: `5` → `r-x`
+## chown for ownership
 
-Therefore, `755` is equivalent to `-rwxr-xr-x`.
+`chown` sets who owns a file. The forms you'll use, shown here on the file you already created:
 
-### Common modes
+```
+chown root /root/report.txt         # set the owner
+chown root:root /root/report.txt    # set owner and group together
+chown :root /root/report.txt        # set only the group
+```
 
-| Mode | Symbolic form | Typical use |
-| --- | --- | --- |
-| `755` | `rwxr-xr-x` | Scripts and executables |
-| `644` | `rw-r--r--` | Text files and configuration files |
-| `700` | `rwx------` | Private directories |
-| `600` | `rw-------` | SSH keys, API tokens, and secrets |
+Add `-R` to change an entire folder and everything inside it in one call, which is what you reach for when handing a whole web root from one service to another.
 
-The exact default mode depends on the system’s `umask`, but new regular files commonly begin with permissions equivalent to `644`.
+Here every file already belongs to root, so these commands run without changing much. On a real server you'd name a real user and group, like `chown alice:developers deploy.sh`, and put `sudo` in front when moving files between services.
 
-## 3. Users and groups
-
-Every Linux process runs as a user, and every file has an owner and group.
-
-### Identify the current user
-
-- `whoami` displays the current username.
-- `id` displays the username, user ID, primary group, and secondary groups.
-
-Typical `id` output may look like:
-
-`uid=0(root) gid=0(root) groups=0(root)`
-
-### User information
-
-User accounts are listed in `/etc/passwd` using fields such as:
-
-`username:x:UID:GID:full name:home directory:login shell`
-
-Password hashes are stored separately in `/etc/shadow`, which is normally readable only by `root`.
-
-### Root and sudo
-
-- `root` is the superuser with UID `0`.
-- Regular users typically work in `/home/<username>`.
-- `sudo` runs a command with elevated privileges.
-- `sudo -i` starts an interactive root shell.
-
-On production systems, use a regular account and elevate only when necessary.
-
-### Groups
-
-Groups allow multiple users to share access to files and resources.
-
-Group information is stored in `/etc/group`, with entries such as:
-
-`groupname:x:GID:members`
-
-A user can have:
-
-- One primary group
-- Multiple secondary groups
-
-## 4. Reading ownership in `ls -l`
-
-An entry such as:
-
-`-rw-r--r-- 1 root root 178 Feb 10 14:22 /etc/hosts`
-
-contains:
-
-- Permissions: `-rw-r--r--`
-- Owner: `root`
-- Group: `root`
-- File size: `178`
-- Modification time
-- File path
-
-To determine your access:
-
-1. Check whether you are the file owner.
-2. If not, check whether you belong to the file’s group.
-3. Otherwise, use the `other` permissions.
-
-## 5. Directory permissions
-
-Directory permissions behave differently from file permissions:
-
-- `r`: list the directory’s names
-- `w`: create, rename, or delete entries
-- `x`: enter the directory and access items by name
-
-A directory usually needs both `r` and `x` to be useful. A directory with `r` but no `x` may show filenames but prevent access to the files themselves.
-
-Example: `drwxr-xr-x`
-
-- It is a directory.
-- The owner can list, modify, and enter it.
-- The group and others can list and enter it but cannot modify its contents.
-
-Use `ls -ld directory` to display the directory itself rather than its contents.
-
-## 6. Changing permissions with `chmod`
-
-`chmod` changes file permissions.
-
-### Symbolic notation
-
-Symbolic notation uses:
-
-- `u`: owner
-- `g`: group
-- `o`: other
-- `a`: all users
-
-Operators:
-
-- `+`: add permission
-- `-`: remove permission
-- `=`: set permissions exactly
-
-Examples:
-
-- `chmod u+x /root/report.txt` — add execute permission for the owner
-- `chmod g-w /root/report.txt` — remove write permission from the group
-- `chmod o=r /root/report.txt` — set others to read-only
-- `chmod a+r /root/report.txt` — give all users read permission
-
-### Octal notation
-
-Octal notation is concise and commonly used:
-
-- `chmod 755 file` → owner can fully access; group and others can read and execute
-- `chmod 644 file` → owner can read/write; group and others can read
-- `chmod 700 directory` → only the owner can access the directory
-- `chmod 600 secret` → only the owner can read/write
-
-## 7. Changing ownership with `chown`
-
-`chown` changes a file’s owner and group.
-
-Examples:
-
-- `chown root file` — change the owner to `root`
-- `chown root:root file` — change owner and group
-- `chown :root file` — change only the group
-- `chown -R user:group directory` — change ownership recursively
-
-Use recursive ownership changes carefully because they affect every file and directory below the target path.
-
-## Quick reference
-
-| Goal | Command |
-| --- | --- |
-| Show detailed permissions | `ls -l file` |
-| Show directory permissions | `ls -ld directory` |
-| Identify current user | `whoami` |
-| Show user and group membership | `id` |
-| Add owner execute permission | `chmod u+x file` |
-| Set standard executable permissions | `chmod 755 file` |
-| Set standard file permissions | `chmod 644 file` |
-| Protect a secret | `chmod 600 secret` |
-| Change owner | `chown user file` |
-| Change owner and group | `chown user:group file` |
-
-**Core mental model:**
-
-`chmod` controls **what** users can do.
-
-`chown` controls **who** owns the file.
-
-The permission string shows the result.
