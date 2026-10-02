@@ -1,6 +1,6 @@
 # Declaring and expanding variables
 
-LessonScripts often use the same value in several places: a folder path, a filename, a server address. Instead of typing it out each time (and fixing every copy when it changes), you store it once in a variable and refer to it by name. In bash the value is treated as plain text by default. Even `5` is stored as the text `5`.
+Scripts often use the same value in several places: a folder path, a filename, a server address. Instead of typing it out each time (and fixing every copy when it changes), you store it once in a variable and refer to it by name. In bash the value is treated as plain text by default. Even `5` is stored as the text `5`.
 
 ## Creating a variable
 
@@ -53,7 +53,7 @@ echo "$full_name"       # prints: Alice Smith
 
 # The quoting rules
 
-LessonThe same variable can behave three different ways depending on how you quote it. The reason: after bash replaces `$name` with its value, it may chop the result into pieces wherever it finds spaces. Quotes control that second step.
+The same variable can behave three different ways depending on how you quote it. The reason: after bash replaces `$name` with its value, it may chop the result into pieces wherever it finds spaces. Quotes control that second step.
 
 ## The same variable, three ways
 
@@ -110,7 +110,7 @@ With `rm $filename`, bash splits the value and hands `rm` two arguments, `my` an
 Double quotes are not a total shutdown like single quotes. Inside `"..."` a few characters keep their meaning:
 
 - `$` still triggers variable expansion.
-- `$(...)` still runs a command (next lesson).
+- `$(...)` still runs a command (next ).
 - `\` still escapes the characters above.
 
 So to get a literal dollar sign inside double quotes, escape it:
@@ -126,7 +126,7 @@ The `\$` becomes a plain `$`, and `$price` right after it expands to `5`.
 
 # Command substitution
 
-LessonSo far you have put fixed text into variables, like `name="Alice"`. But often the value you want is not fixed. It is something a command already knows: today's date, the machine's name, how many files are in a folder. You could run the command, read the output with your eyes, and type it into the variable yourself. But that value would be stale the next day, and a script cannot read with its eyes anyway.
+So far you have put fixed text into variables, like `name="Alice"`. But often the value you want is not fixed. It is something a command already knows: today's date, the machine's name, how many files are in a folder. You could run the command, read the output with your eyes, and type it into the variable yourself. But that value would be stale the next day, and a script cannot read with its eyes anyway.
 
 Command substitution solves this. It runs a command for you and drops whatever the command prints straight into a variable. No copying by hand: bash grabs the output and stores it.
 
@@ -155,7 +155,7 @@ echo "log-$(date +%Y%m%d)-$(hostname).txt"
 
 ## Command substitution and quoting
 
-Last lesson's quoting rules apply. Double quotes let the substitution run; single quotes turn it off and print it literally:
+Last 's quoting rules apply. Double quotes let the substitution run; single quotes turn it off and print it literally:
 
 ```
 report="report-$(date +%Y%m%d).csv"
