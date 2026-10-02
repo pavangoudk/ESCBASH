@@ -20,6 +20,20 @@ A good way to picture it: think of shipping goods across the world. A shipping c
 
 Here is the same idea as a picture. One container, built once, runs unchanged on three very different machines:
 
+```
+
+                             --------------------------------
+                                Container
+                                your program + its exact
+                                versions, libraries, settings
+                            -----------------------------------
+
+runs the same                    runs the same                         runs the same
+
+Your laptop                      A friend's computer                   Company server
+
+
+```
 ## Why so many people use it
 
 This one idea - "package it once, run it anywhere" - turns out to be useful everywhere in modern software:
