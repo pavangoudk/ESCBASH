@@ -1,180 +1,203 @@
-# Creating, Copying, Moving, and Removing Files — Notes
+# Creating, copying, and moving files
 
-## 1. Creating files with `touch`
+Three commands cover most of the "put a file here" moves you'll make.
+
+## touch
 
 `touch` creates an empty file.
 
-- `touch /root/notes.txt`
+```
+touch /root/notes.txt
+```
 
-If the file already exists, `touch` updates its modification time without changing its contents.
+If the file already exists, `touch` updates its modification time and leaves the contents alone. That second behaviour is useful sometimes; usually you just want a new empty file.
 
-## 2. Copying files with `cp`
+## cp
 
-`cp` copies a file while leaving the original unchanged.
+`cp` copies a file from one place to another.
 
-- `cp /etc/hostname /tmp/hostname-backup`
+```
+cp /etc/hostname /tmp/hostname-backup
+```
 
-To copy a file into a folder, specify the folder path:
+If the destination is a folder, the file is placed inside it with the same name:
 
-- `cp /etc/hostname /tmp/`
+```
+cp /etc/hostname /tmp/
+```
 
-To copy an entire folder, use `-r` for recursive copying:
+Copying a whole folder needs `-r` (recursive):
 
-- `cp -r /etc/apt /tmp/apt-backup`
+```
+cp -r /etc/apt /tmp/apt-backup
+```
 
-Without `-r`, `cp` will not copy directories.
+Without `-r`, `cp` refuses to copy directories.
 
-## 3. Moving and renaming with `mv`
+## mv
 
-`mv` can move a file or folder, or rename it.
+`mv` is both "move to a different folder" and "rename in place". Linux doesn't distinguish, renaming a file is just moving it to a new name in the same folder.
 
-Rename a file:
+```
+mv /tmp/hostname-backup /tmp/hostname.txt      # rename
+mv /tmp/hostname.txt /root/                    # move to /root
+```
 
-- `mv /tmp/hostname-backup /tmp/hostname.txt`
+Unlike `cp`, `mv` handles folders without needing `-r`. Moving a folder just updates a pointer, so it's fast even for huge trees.
 
-Move a file:
 
-- `mv /tmp/hostname.txt /root/`
+# Removing files safely
 
-Unlike `cp`, `mv` does not require `-r` to move folders. Moving is usually fast because Linux changes the file’s location reference rather than copying all its contents.
+`rm` deletes files. It's the simplest command in this topic, and the most dangerous.
 
-## 4. Removing files with `rm`
+## The basics
 
-`rm` permanently deletes files.
+In the previous  you created a file `/root/notes.txt` with `touch`. Let's delete it:
 
-Delete one file:
+```
+rm /root/notes.txt             # delete a file
+```
 
-- `rm /root/notes.txt`
+You also created `/tmp/hostname` and `/root/hostname.txt` in that . You can delete several at once by listing them:
 
-Delete multiple files:
+```
+rm /tmp/hostname /root/hostname.txt   # delete several
+```
 
-- `rm /tmp/hostname /root/hostname.txt`
+`rm` refuses to delete folders unless you tell it to recurse. In the previous  you created the folder `/tmp/apt-backup` with `cp -r`. Let's delete it:
 
-Linux does not normally provide a recoverable trash step for `rm`.
+```
+rm -r /tmp/apt-backup          # -r walks into subfolders
+```
 
-## 5. Removing folders
+`-f` forces the delete without prompting, even for write-protected files. Combined with `-r`, it removes a whole folder without asking. Make a throwaway folder and delete it this way:
 
-Use `-r` to delete a folder and its contents recursively:
+```
+mkdir /tmp/scratch
+rm -rf /tmp/scratch            # recursive AND forced
+```
 
-- `rm -r /tmp/apt-backup`
+## The rm -rf trap
 
-Use `-f` to force deletion without confirmation:
+`rm -rf` on a real server is the mistake that gets people fired. Two things make it deadly:
 
-- `rm -rf /tmp/scratch`
+1. There's no trash. Files are gone the second `rm` finishes.
+2. It's typo-friendly. A stray space between `/` and the rest of the path turns a targeted delete into a delete of your entire operating system. These two commands are one keystroke apart:
 
-Meaning:
+```
+rm -rf /root/oldproject
+rm -rf / root/oldproject
+```
 
-- `-r`: recursive
-- `-f`: forced
-- `-rf`: recursive and forced
+Habits worth building before you press Enter on any `rm`:
 
-### The `rm -rf` warning
+- Read the path twice, especially the leading `/`.
+- If you're deleting a folder, run `ls` on it first to see what's inside.
+- Prefer specific paths over wildcards. Deleting one named log file is safer than deleting everything a wildcard happens to match:
 
-`rm -rf` is extremely powerful and dangerous:
+```
+rm /var/log/oldapp/2023.log      # one exact file
+rm /var/log/oldapp/*             # every file in the folder
+```
 
-- Deleted files are not moved to a trash folder.
-- A typo can delete far more than intended.
-- Always verify the path before pressing Enter.
-- Pay close attention to the leading `/`.
-- Avoid unnecessary wildcards.
+(The `*` wildcard is covered in the next node. Here it just means "every file in the folder".)
 
-For example, `rm -rf /root/oldproject` targets one directory, while an accidental space in `rm -rf / root/oldproject` can cause a destructive command targeting `/`.
+## -i for a safety net
 
-Before deleting a folder, inspect it first with `ls`.
+`-i` (interactive) asks for confirmation before each delete. Make a file and try it, it will ask before removing:
 
-## 6. Interactive deletion with `rm -i`
+```
+touch /tmp/scratch.txt
+rm -i /tmp/scratch.txt
+```
 
-`-i` asks for confirmation before deleting.
+Annoying for batch operations, but a reasonable default when you're new or when the delete is important.
 
-- First create a test file with `touch /tmp/scratch.txt`.
-- Then use `rm -i /tmp/scratch.txt`.
+# Wildcards and globs
 
-This is useful when learning Linux or deleting important files.
+Globs let you name many files at once with a pattern. Instead of typing out every filename, you describe them with a pattern, and the shell turns that pattern into the list of matching filenames before the command runs.
 
-## 7. Wildcards and globs
+Imagine a folder full of files and you want to list only the ones that end in `.log`. Typing each name one by one would be tedious. A glob like `*.log` says "every file ending in `.log`" and does it in one shot.
 
-Globs are patterns that the shell expands into matching filenames before running a command.
+## The two patterns you'll actually use
 
-### Main wildcard characters
+- `*` matches any number of characters (including zero).
+- `?` matches exactly one character.
 
-| Pattern | Meaning |
-| --- | --- |
-| `*` | Matches any number of characters, including zero |
-| `?` | Matches exactly one character |
+## Run the below commands to prepare your lab environment
 
-Example files:
+```
+mkdir -p /tmp/globs
+cd /tmp/globs
+touch a.log app.log notes.txt
+```
 
-- `a.log`
-- `app.log`
-- `notes.txt`
+Now you are in the `/tmp/globs` folder. It has three files: `a.log`, `app.log`, and `notes.txt`. Run `ls *.log` and you should see the two `.log` files:
 
-Patterns:
+```
+ls *.log       # a.log app.log   (any name ending in .log)
+```
 
-- `*.log` matches `a.log` and `app.log`.
-- `?.log` matches only `a.log`.
-- `*` matches all files in the directory.
+Now try `?.log`. The `?` matches exactly one character, so it only matches `a.log` (a single `a` before `.log`). `app.log` has three characters before `.log`, so it is left out:
 
-## 8. Preparing a glob practice folder
+```
+ls ?.log       # a.log           (one character, then .log)
+```
 
-Useful setup commands include:
+And `*` on its own matches everything in the folder:
 
-- `mkdir -p /tmp/globs`
-- `cd /tmp/globs`
-- `touch a.log app.log notes.txt`
+```
+ls *           # a.log app.log notes.txt
+```
 
-Additional examples:
+## Common uses
 
-- `touch server.conf db.conf`
-- `touch old_data.txt old_report.txt`
-- `touch access.log.gz error.log.gz`
+Add a few more files to `/tmp/globs` so you can try the patterns you'll reach for most often:
 
-`mkdir -p` creates the directory and any missing parent directories.
+```
+touch server.conf db.conf
+touch old_data.txt old_report.txt
+touch access.log.gz error.log.gz
+```
 
-## 9. Common glob uses
+**Copy every `.conf` file into another folder.** `*.conf` matches `server.conf` and `db.conf`, so both get copied:
 
-Copy all `.conf` files:
+```
+mkdir /tmp/globs/backup
+cp *.conf /tmp/globs/backup/
+ls /tmp/globs/backup/            # db.conf server.conf
+```
 
-- `mkdir /tmp/globs/backup`
-- `cp *.conf /tmp/globs/backup/`
+**Move every file whose name starts with `old_`.** `old_*` matches `old_data.txt` and `old_report.txt`:
 
-Move files beginning with `old_`:
+```
+mkdir /tmp/globs/archive
+mv old_* /tmp/globs/archive/
+ls /tmp/globs/archive/          # old_data.txt old_report.txt
+```
 
-- `mkdir /tmp/globs/archive`
-- `mv old_* /tmp/globs/archive/`
+**List every gzipped file.** `*.gz` matches `access.log.gz` and `error.log.gz`:
 
-List compressed `.gz` files:
+```
+ls -la *.gz                     # access.log.gz error.log.gz
+```
 
-- `ls -la *.gz`
+## The rm + glob trap
 
-## 10. The wildcard deletion trap
+The shell expands globs before the command sees them. A mistake in the pattern can widen the match without any warning:
 
-The shell expands the wildcard before `rm` runs.
+```
+rm *.tmp        # removes .tmp files. Good.
+rm * .tmp       # removes EVERYTHING in the folder AND tries to remove ".tmp"
+```
 
-- `rm *.tmp` deletes files ending in `.tmp`.
-- `rm * .tmp` may attempt to delete everything in the current directory and then process `.tmp` separately.
+That extra space is all it takes. When deleting with a glob, always preview first:
 
-Always preview a wildcard before deleting:
+```
+ls *.tmp        # what will get matched?
+rm *.tmp        # now delete
+```
 
-1. Run `ls *.tmp`.
-2. Confirm the results.
-3. Run `rm *.tmp`.
+The preview costs nothing and catches mistakes before they matter.
 
-## Command selection guide
-
-| Goal | Command |
-| --- | --- |
-| Create an empty file | `touch file` |
-| Copy a file | `cp source destination` |
-| Copy a folder | `cp -r source destination` |
-| Move a file or folder | `mv source destination` |
-| Rename a file | `mv old-name new-name` |
-| Delete a file | `rm file` |
-| Delete a folder | `rm -r folder` |
-| Force deletion | `rm -f file` |
-| Delete recursively without prompts | `rm -rf folder` |
-| Confirm each deletion | `rm -i file` |
-| Match many filenames | Use `*` or `?` |
-
-## Key takeaway
-
-Use `touch` to create files, `cp` to preserve the original while making a copy, and `mv` to move or rename items. Treat `rm`, especially `rm -rf`, with extreme caution. Before using a wildcard with deletion, preview exactly what it matches.
+← Previous
