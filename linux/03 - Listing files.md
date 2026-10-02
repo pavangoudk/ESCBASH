@@ -1,184 +1,134 @@
-# Linux File Listing and Help Commands — Notes
+# Listing a folder
 
-## 1. Listing folder contents with `ls`
-
-# 
-
-- `ls` lists files and folders in the current directory.
-- `ls /etc` lists the contents of `/etc`.
-- `ls -l /etc` displays a detailed listing.
-
-Example:
+`ls` prints what's inside a folder. Given no arguments, it lists your current folder. Given a path, it lists that folder.
 
 ```
+ls              # current folder
+ls /etc         # specifically /etc
+```
 
-ls
-ls /etc
+On a fresh machine your home folder can look empty, because its only files are hidden (their names start with a dot). A populated folder like `/etc` shows the difference right away.
+
+The plain output shows names only. Useful, but not the whole picture. Add `-l` (lowercase L, for "long") and every entry expands into a row with metadata:
+
+```
 ls -l /etc
 ```
 
-## 2. Understanding a long listing
-
-# 
-Example:
+A single row looks like this:
 
 ```
-Plain textdrwxr-xr-x  2 root root  4096 Feb 10 14:22 nginx
+drwxr-xr-x  2 root root   4096 Feb 10 14:22 nginx
 ```
 
-Important fields:
+Seven columns worth reading:
 
-- `d`: the item is a directory.
-- `-`: the item is a regular file.
-- `rwxr-xr-x`: permissions.
-- `root`: owner.
-- `root`: group.
-- `4096`: size in bytes.
-- `Feb 10 14:22`: last modification date and time.
-- `nginx`: file or directory name.
+1. `d` says this is a directory. A `-` in that position means a regular file.
+2. `rwxr-xr-x` is the permissions preview. You will learn this in a later topic.
+3. `2` is the link count. Ignore it for now.
+4. `root` is the owner.
+5. `root` is the group.
+6. `4096` is the size in bytes.
+7. The date and time (in the example, `Feb 10` at `14:22`) show when the file was last modified.
+8. `nginx` is the name.
 
-For now, focus on:
+For now, focus on the first character (file or folder?) and the last few columns (size, date, name). The rest becomes useful once you learn about permissions and ownership.
 
-1. Whether the item is a file or directory.
-2. Its size.
-3. Its modification date.
-4. Its name.
+---
 
-## 3. Hidden files
+# Hidden files and useful flags
 
-# 
-Files and folders whose names begin with `.` are hidden by default.
+## Hidden files
+
+Any file or folder whose name starts with a dot is hidden from plain `ls`. These are called **dotfiles**.
 
 ```
-
-ls
-ls -a
+ls           # normal listing, no dotfiles
+ls -a        # include hidden entries
 ```
 
-- `ls`: hides dotfiles.
-- `ls -a`: shows all files, including hidden files.
+Dotfiles hold configuration. On any Linux machine you'll meet:
 
-Common dotfiles and folders:
+- `.rc` - shell startup config
+- `.ssh/` - SSH keys and known hosts
+- `.aws/`, `.kube/` - cloud and cluster credentials
+- `.gitignore`, `.env` - project-level config
 
-| Item | Purpose |
-| --- | --- |
-| `.rc` | Shell startup configuration |
-| `.ssh/` | SSH keys and known hosts |
-| `.aws/` | AWS configuration and credentials |
-| `.kube/` | Kubernetes configuration |
-| `.gitignore` | Files Git should ignore |
-| `.env` | Project environment configuration |
+As a DevOps engineer you'll edit dotfiles constantly. Getting comfortable with `-a` early saves a lot of "where did that file go?" moments.
 
-## 4. Useful `ls` options
+## Human sizes and time sorting
 
-# 
+Two more flags earn their keep every day:
 
-| Option | Meaning |
-| --- | --- |
-| `-a` | Show hidden files |
-| `-l` | Use long format |
-| `-h` | Show human-readable sizes |
-| `-t` | Sort by modification time, newest first |
+- `-h` prints file sizes in human units (`4.0K`, `12M`, `3.2G`) instead of raw bytes.
+- `-t` sorts newest first, which is exactly what you want when hunting for the file that just changed.
 
-The commonly used command is:
+## The ls -lah combo
+
+Most people run `ls` with a combination of flags. The one you'll type hundreds of times a week:
 
 ```
-
 ls -lah
 ```
 
-This means:
-
-- `-l`: detailed listing
-- `-a`: include hidden files
-- `-h`: use readable file sizes
-
-To inspect your home directory:
+That's long listing, all files (hidden included), human-readable sizes. Type it now against your home folder:
 
 ```
-
 ls -lah ~
 ```
 
-Here, `~` represents your home directory.
+You'll see files like `.rc` and `.profile` that plain `ls` was hiding from you.
 
-## 5. Pipes
+## Pipes and counting lines
 
-# 
-A pipe, written as `|`, sends the output of one command into another command.
-
-```
-
-ls /etc | wc -l
-```
-
-This command:
-
-1. Lists the contents of `/etc`.
-2. Sends the output to `wc`.
-3. Uses `-l` to count the lines.
-
-`wc -l` is commonly used to count lines of command output.
-
-## 6. Filtering output with `grep`
-
-# 
-`grep` keeps only lines that match a pattern.
+A **pipe** (`|`) sends the output of one command as the input of another. It's the single most useful operator in the shell.
 
 ```
-
-ls -a ~ | grep '^\.'
+ls /etc | wc -l           # how many entries live in /etc
 ```
 
-This shows only entries beginning with a dot, which are hidden files.
+Read that as: run `ls /etc`, then send its output into `wc -l`, which counts lines. Because `ls` prints one entry per line when its output isn't a terminal, this gives you the count in one shot.
 
-The pattern `^\.` means:
+`wc` is short for "word count". You'll use the `-l` flag (count lines) far more often than the others. A full topic on reading files covers `wc` in more detail; for now, `wc -l` is the count tool.
 
-- `^`: the beginning of a line
-- `\.`: a literal period
-
-## 7. Getting help
-
-### Quick help
-
-# 
+You can also filter output with `grep`, which keeps only the lines matching a pattern:
 
 ```
+ls -a ~ | grep '^\.'      # only entries starting with a dot (dotfiles)
+```
 
+`grep` gets its own topic later. Recognise the shape for now: some command produces lines, `grep` keeps the ones that match.
+
+---
+
+# Getting help
+
+Nobody memorises every flag of every command. You look them up. Linux ships with three ways to do that, all on the machine you're already logged into.
+
+## `--help`
+
+Almost every command accepts `--help`. It prints a short summary of what the command does and every flag it takes.
+
+```
 ls --help
 ```
 
-`--help` provides a short explanation of the command and its available options.
+Fast, keyword-searchable when piped through `grep`, and never lies about the version you have installed.
 
-### Full manual
+## `man`
 
-# 
+`man` opens the full manual page for a command. Use it when `--help` is too terse.
+
 ```
-
 man ls
 ```
 
-Useful controls inside a manual page:
+Navigate with the arrow keys or Page Up / Page Down. Press `/` to search, and `q` to quit. Every core Linux command has a man page.
 
-- Arrow keys: move through the document
-- Page Up/Page Down: move faster
-- `/`: search
-- `q`: quit
+## `-h`
 
-Some commands use `-h` for help, but others use it for a different purpose. For example, `ls -h` means human-readable sizes. When unsure, try `--help` first.
+Some commands use `-h` as a shortcut for help (`docker -h`, `curl -h`). Others use `-h` for something completely different, like "human-readable sizes" in `ls -h`. When in doubt, try `--help` first, it's the convention.
 
-## 8. Core workflow
+As a rule of thumb: reach for `--help` first because it's fast, and fall back to `man` when you need the full picture.
 
-# 
-When working in the terminal:
-
-1. Use `ls` to see what is present.
-2. Use `ls -lah` to inspect details and hidden files.
-3. Use `grep` to filter results.
-4. Use `wc -l` to count results.
-5. Use `--help` or `man` to learn command options.
-
-## Key takeaway
-
-# 
-The `ls` command helps you inspect files and folders. Its flags provide more detail, pipes connect commands, `grep` filters output, and `wc -l` counts lines. When you are unsure how a command works, use `--help` first and `man` for the complete manual.
+---
