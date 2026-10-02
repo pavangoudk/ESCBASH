@@ -147,7 +147,7 @@ LessonDocker has two parts: a command line client you type into, and a backgroun
 
 The first thing to check on any machine is whether the client can reach the daemon:
 
-bash```
+```
 docker version
 ```
 
@@ -157,7 +157,7 @@ This prints two blocks, Client and Server. Seeing both means the client is insta
 
 For a fuller picture of the engine's state, use:
 
-bash```
+```
 docker info
 ```
 
