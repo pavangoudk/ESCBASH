@@ -1,4 +1,4 @@
-# Ps and interfaces
+# IPs and interfaces
 
 Every machine on a network has one or more **network interfaces**. An interface is a lane the machine uses to send and receive traffic. Most Linux servers have at least two:
 
