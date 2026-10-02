@@ -20,8 +20,6 @@ A good way to picture it: think of shipping goods across the world. A shipping c
 
 Here is the same idea as a picture. One container, built once, runs unchanged on three very different machines:
 
-<img width="473" height="194" alt="image" src="https://github.com/user-attachments/assets/dc66b3dd-7469-42d4-b90e-6481836bcf16" />
-
 ## Why so many people use it
 
 This one idea - "package it once, run it anywhere" - turns out to be useful everywhere in modern software:
@@ -169,7 +167,7 @@ It reports how many images and containers exist, the storage driver, the total m
 
 The classic smoke test pulls a tiny image and runs it:
 
-bash```
+```
 docker run hello-world
 ```
 
