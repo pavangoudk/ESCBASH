@@ -1,6 +1,5 @@
 # cron format and crontab
 
-Lesson
 `cron` is the classic Linux scheduler. It runs commands on a schedule you define. Every DevOps engineer meets it within their first month, and it hasn't fundamentally changed in decades.
 
 ## The five fields
@@ -61,7 +60,7 @@ crontab -r         # remove your entire crontab (be careful)
 
 ## cron runs with a bare environment
 
-Here's the gotcha that catches everyone. When cron runs your job it does not load your shell's setup. No `.bashrc`, no `.profile`, and a very short `PATH` (usually just `/usr/bin` and `/bin`).
+Here's the gotcha that catches everyone. When cron runs your job it does not load your shell's setup. No `.rc`, no `.profile`, and a very short `PATH` (usually just `/usr/bin` and `/bin`).
 
 So a command that works when you type it by hand can still fail under cron, because cron can't find it. Tools like `docker`, `python3`, `aws`, and `node` often live in `/usr/local/bin`, which isn't on cron's `PATH`. The job dies with "command not found" and you never see the error.
 
@@ -74,9 +73,11 @@ Two ways to fix it:
 PATH=/usr/local/bin:/usr/bin:/bin
 ```
 
+
+
 # System-wide cron jobs
 
-Lesson`crontab -e` sets up your own personal schedule. For system-level jobs (log rotation, package updates, backups), cron looks in a set of well-known folders under `/etc/`.
+`crontab -e` sets up your own personal schedule. For system-level jobs (log rotation, package updates, backups), cron looks in a set of well-known folders under `/etc/`.
 
 ## The convenience folders
 
@@ -110,10 +111,11 @@ These files behave like extra crontabs, except they specify which user runs the 
 
 There's also a single `/etc/crontab` file with the same format as `/etc/cron.d/*`. Modern practice is to leave `/etc/crontab` alone and put your jobs in `/etc/cron.d/`, one file per purpose. Easier to review, easier to remove.
 
-← Previous
+
+
 # systemd timers
 
-Lessoncron works and it's everywhere, but it has real weaknesses: no proper logging, no dependency handling, and it silently discards output. systemd timers are the modern alternative, and they pair naturally with the service units from earlier topics.
+cron works and it's everywhere, but it has real weaknesses: no proper logging, no dependency handling, and it silently discards output. systemd timers are the modern alternative, and they pair naturally with the service units from earlier topics.
 
 ## The pair: a service and a timer
 
@@ -129,7 +131,7 @@ A timer never runs a command directly. It triggers a matching service that descr
 Start with a small script for the service to run. Build it with a couple of `echo` lines and mark it executable:
 
 ```
-echo '#!/bin/bash' > /root/backup.sh
+echo '#!/bin/' > /root/backup.sh
 echo 'date >> /root/backup.log' >> /root/backup.sh
 chmod +x /root/backup.sh
 ```
@@ -158,6 +160,7 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 ```
+
 `OnCalendar=` sets the schedule. `Persistent=true` runs a job that got missed (the machine was off at 02:30) as soon as it boots back up.
 
 ## Reading OnCalendar
@@ -169,7 +172,6 @@ OnCalendar=hourly              # every hour, on the hour
 OnCalendar=daily               # every day at 00:00
 OnCalendar=weekly              # Monday at 00:00
 OnCalendar=Mon *-*-* 09:00:00  # every Monday at 09:00
-
 ```
 
 ## Load, enable, and inspect
@@ -196,4 +198,3 @@ That prints every active timer, when it last ran, and when it fires next. Handy 
 
 You'll meet both. Older systems lean on cron; newer services often ship a `.timer` file next to their `.service`.
 
-← Previous
