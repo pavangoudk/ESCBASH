@@ -1,82 +1,75 @@
-# Linux Filesystem Tree — Notes
+# The Linux filesystem tree
 
-## 1. The filesystem tree
+Every file and folder on a Linux machine lives inside one tree. The tree has exactly one root, written `/`. No `C:`, no `D:`, no separate drives.
 
-- Every file and folder exists inside one tree.
-- The tree has one root: `/`.
-- Linux does not use separate drive letters such as `C:` or `D:`.
+```
+/
+├── etc/       # system-wide configuration
+├── var/       # variable data: logs, spools, caches
+├── home/      # regular users' home folders
+├── root/      # the root user's home
+├── tmp/       # temporary files, often wiped on reboot
+├── usr/       # installed software
+└── bin/       # essential command binaries
+```
 
-### Common folders under `/`
+These are the most common folders that you would see directly under `/`. Each one has a specific job.
 
-| Folder | Purpose |
-| --- | --- |
-| `/etc` | System-wide configuration files |
-| `/var` | Changing data such as logs, mail queues, and caches |
-| `/home` | Home folders for regular users |
-| `/root` | Home folder for the root administrator |
-| `/tmp` | Temporary scratch space; files may be deleted on reboot |
-| `/usr` | Installed software, libraries, and documentation |
-| `/bin` | Essential command programs; often linked to `/usr/bin` |
+- `/etc` holds system-wide configuration.
+- `/var` holds data that changes while the system runs, like logs, mail queues, and package caches. The one you'll open most is `/var/log`, which is where every service writes its log files.
+- `/home` holds one folder per regular user account. A user named `alice` gets `/home/alice` as her home folder, and she typically owns everything inside it.
+- `/root` is the home folder of the root (administrator) user. It's kept separate from `/home` so the root account can still work even if `/home` is on a broken disk.
+- `/tmp` is scratch space. Any process can write files here, and the contents are typically wiped on reboot. Never store anything you want to keep.
+- `/usr` holds installed software: user programs in `/usr/bin`, libraries in `/usr/lib`, documentation in `/usr/share`. Package managers put most of their files here.
+- `/bin` holds essential command binaries needed early during boot and system recovery, like `ls`, `cp`, and `bash`. On modern Linux it's usually a symlink to `/usr/bin`.
 
-Other important folders include `/dev`, `/proc`, `/sys`, `/opt`, `/srv`, `/mnt`, and `/media`.
+The others exist too (`/dev`, `/proc`, `/sys`, `/opt`, `/srv`, `/mnt`, `/media`), and you'll meet them as they come up.
 
-## 2. Important folder details
+## Where you are in the tree
 
-- `/var/log` contains logs written by system services.
-- A user named Alice normally has `/home/alice`.
-- The root user’s home is `/root`, separate from `/home`.
-- Do not store important files in `/tmp`.
-- `/usr/bin` contains user programs.
-- `/usr/lib` contains libraries.
-- `/usr/share` contains shared documentation and other data.
-- On modern Linux systems, `/bin` is usually a symbolic link to `/usr/bin`.
+You met `pwd` in the previous topic. Run it now and you'll see where in this tree the shell has placed you (probably `/root`, the root user's home). Every path you write is either an address starting from `/` (the top of this tree) or a shortcut from wherever `pwd` currently reports. The next node covers those two styles in detail.
 
-## 3. Paths
+# Absolute and relative paths
 
-A path identifies the location of a file or folder.
+A **path** is an address for a file or folder. If you want to access a file or a folder in Linux, you can use either its **absolute path** or its **relative path**.
 
-### Absolute paths
+## Absolute paths
 
-- Begin with `/`.
-- Describe the complete route from the filesystem root.
-- Work from any current directory.
+Imagine there is a file `nginx.conf` inside the `nginx` folder, which is inside the `etc` folder:
 
-Example: `/etc/nginx/nginx.conf`
+```
+/
+└── etc
+    └── nginx
+        └── nginx.conf
+```
 
-This means:
+An absolute path starts with `/` and describes the full route from the top of the tree down to the file. For the file above, that is:
 
-- `nginx.conf` is inside `nginx`
-- `nginx` is inside `etc`
-- `etc` is directly under `/`
+```
+/etc/nginx/nginx.conf
+```
 
-Other examples:
+Read the slashes as "inside". `/etc/nginx/nginx.conf` means the file `nginx.conf` inside the folder `nginx`, which is inside the folder `etc` at the top of the tree.
 
-- `/var/log/syslog`
-- `/home/alice/notes.txt`
+A few more examples:
 
-### Relative paths
+```
+/var/log/syslog
+/home/alice/notes.txt
+```
 
-- Do not begin with `/`.
-- Start from the directory where you are currently located.
-- Your current location can be checked with `pwd`.
+Absolute paths work from anywhere. Standing in `/tmp`, you can still say `/etc/hosts` and the shell knows exactly which file you mean.
 
-If the current directory is `/home/alice`:
+## Relative paths
 
-- `notes.txt` refers to `/home/alice/notes.txt`
-- `photos/summer.jpg` refers to `/home/alice/photos/summer.jpg`
-- `../bob/notes.txt` refers to `/home/bob/notes.txt`
+A relative path doesn't start with `/`. It's read starting from wherever you're currently standing.
 
-## 4. Path shortcuts
+If your current folder is `/home/alice`, then:
 
-- `.` means the current directory.
-- `..` means the parent directory, one level higher.
+- `notes.txt` means `/home/alice/notes.txt`
+- `photos/summer.jpg` means `/home/alice/photos/summer.jpg`
 
-## 5. Main rule
+Two shortcuts turn up in relative paths: `.` means the folder you are in now, and `..` means the folder one level up. So from `/home/alice`, `../bob/notes.txt` means `/home/bob/notes.txt`.
 
-- Use an absolute path when a command must work from anywhere.
-- Use a relative path when you are already near the target file or folder.
-
-| Path type | Starts with | Best used when |
-| --- | --- | --- |
-| Absolute | `/` | You need an unambiguous location |
-| Relative | Anything else | You are working from a known current directory |
+Both styles name the same file. Use an absolute path when the command has to work from anywhere, and a relative path when you are already standing next to the file.
