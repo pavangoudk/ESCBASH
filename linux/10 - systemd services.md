@@ -1,90 +1,91 @@
-# Linux Notes: `systemd`
+# What is systemd
 
-## 1. What is systemd?
+Every long-running program on a modern Linux server is a "service", and almost every service is managed by **systemd**. When the machine boots, systemd is the first process to start, and it launches everything else: network, SSH, cron, your database, your web server.
 
-`systemd` is the init system and service manager used by most modern Linux distributions.
+## The first process
 
-It:
+When Linux boots, the kernel starts exactly one program, and that program is responsible for starting everything else. That program is the **init system**, and on almost every modern distribution the init system is systemd.
 
-- Starts during system boot
-- Usually runs as process ID `1`
-- Starts and manages services
-- Handles startup dependencies
-- Restarts failed services
-- Collects service logs
-- Supports timers, sockets, mounts, and other unit types
+Because it starts first, it gets process ID 1. You can see it:
 
-Check whether systemd is PID 1 with `ps -p 1 -o pid,comm`.
+```
+ps -p 1 -o pid,comm
+```
 
-## 2. Why use systemd instead of `nohup`?
+```
+  PID COMMAND
+    1 systemd
+```
 
-`nohup` keeps a process running after logout, but it does not provide robust service management.
+Every other process is started by systemd, or by something systemd started, so PID 1 sits at the root of the whole process tree. If it ever exits, the machine goes down, which is why it's built to keep running no matter what.
 
-Systemd can:
+## Why not just run things with nohup?
 
-- Start services automatically at boot
-- Restart services after failure
-- Start services in the correct dependency order
-- Centralize logs in the system journal
-- Track service status and process IDs
+You met `nohup` in the previous topic. It keeps a command alive after you log out, but it doesn't handle any of:
 
-For a long-running production service, use a systemd unit instead of simply running a command with `&`.
+- Starting automatically when the machine boots.
+- Restarting if the program crashes.
+- Making sure dependencies (like the network) are up first.
+- Collecting the program's logs where the rest of the system's logs live.
 
-## 3. Units
+systemd does all of these. When you deploy a service to a Linux box, you don't run it with `&`, you write a systemd unit for it.
 
-A **unit** is something managed by systemd.
+## Units
 
-Common unit types include:
+A **unit** is systemd's word for "a thing it manages". The most common type is `service`, but systemd also manages timers, sockets, mounts, and more. Every unit has a name that ends in its type:
 
-| Unit type | Example | Purpose |
-| --- | --- | --- |
-| Service | `nginx.service` | Runs a long-lived program |
-| Timer | `backup.timer` | Schedules a task |
-| Socket | `app.socket` | Listens for network or local connections |
-| Mount | `data.mount` | Manages a filesystem mount |
+- `ssh.service` - the SSH daemon
+- `cron.service` - the cron scheduler
+- `nginx.service` - the nginx web server
+- `backup.timer` - a scheduled job
 
-The two main tools are:
+You control units with one command, `systemctl`. You read their logs with `journalctl`. That's the whole daily surface.
 
-- `systemctl` — control and inspect units
-- `journalctl` — read unit logs
 
-The `.service` suffix is often optional, so `systemctl status nginx` generally refers to `nginx.service`.
 
-## 4. Essential `systemctl` commands
+# systemctl basics
 
-### Check and control a service
+`systemctl` is how you talk to systemd. A handful of subcommands cover almost all your daily work.
 
-| Command | Purpose |
-| --- | --- |
-| `systemctl status ssh` | Show service status |
-| `systemctl start ssh` | Start the service now |
-| `systemctl stop ssh` | Stop the service now |
-| `systemctl restart ssh` | Stop and start the service |
-| `systemctl reload ssh` | Reload configuration without stopping |
-| `systemctl enable ssh` | Start automatically at boot |
-| `systemctl disable ssh` | Do not start automatically at boot |
-| `systemctl enable --now ssh` | Enable and start immediately |
-| `systemctl disable --now ssh` | Disable and stop immediately |
+## Life cycle
 
-`reload` only works when the service supports configuration reloading. Use `restart` when necessary, remembering that it may cause brief downtime.
+```
+systemctl status ssh              # what's going on with ssh?
+systemctl start ssh               # start it now
+systemctl stop ssh                # stop it now
+systemctl restart ssh             # stop then start
+systemctl reload ssh              # re-read config, no downtime
+```
 
-## 5. `active` versus `enabled`
+`reload` only works if the service supports it. If in doubt, `restart` always works, at the cost of a brief downtime.
 
-These are separate settings:
+## enabled vs active
 
-- **Active:** Is the service running now?
-- **Enabled:** Will the service start automatically at boot?
+Two independent settings you'll always be checking:
 
-Possible combinations:
+- **active** - is the service running right now?
+- **enabled** - will it auto-start when the machine boots?
 
-| Active | Enabled | Meaning |
-| --- | --- | --- |
-| Yes | Yes | Running now and starts at boot |
-| Yes | No | Running now but will not start after reboot |
-| No | Yes | Not running now but configured for boot |
-| No | No | Not running and not configured for boot |
+A service can be enabled but not active (will start on boot but currently off), active but not enabled (running right now but won't come back after a reboot), both, or neither.
 
-## 6. Reading `systemctl status`
+```
+systemctl enable ssh              # auto-start on next boot
+systemctl disable ssh             # don't start on boot
+systemctl enable --now ssh        # enable AND start immediately
+systemctl disable --now ssh       # disable AND stop immediately
+```
+
+`--now` is the shortcut you'll type most often when setting up (or removing) a service.
+
+## Reading status output
+
+`systemctl status` is the command you'll run most, so it's worth learning to read line by line:
+
+```
+systemctl status nginx
+```
+
+A healthy service prints something like this:
 
 ```
 ● nginx.service - A high performance web server
@@ -100,119 +101,107 @@ Possible combinations:
 Jul 28 09:14:02 host systemd[1]: Started nginx.service.
 ```
 
-A healthy service often reports:
+Read it top to bottom:
 
-- **Loaded:** Unit file location and whether it is enabled
-- **Active:** Current state, such as `active (running)`, `inactive (dead)`, or `failed`
-- **Main PID:** Primary process ID
-- **Tasks:** Number of processes or tasks
-- **Memory:** Current memory usage
-- **CGroup:** Process grouping for the service
-- Recent journal entries
+- The dot on the first line is green when the service is healthy and red when it has failed.
+- **Loaded** shows the unit file's path and whether it's `enabled`, so you know if it starts on boot.
+- **Active** is the line to check first. `active (running)` means it's up. You'll also see `inactive (dead)`, `failed`, or `activating`, and the `since ...` tells you how long it's held that state.
+- **Main PID** is the process ID of the service, handy if you want to look it up with the process tools.
+- The line at the bottom is the most recent journal entry for the service, often enough to spot a problem without opening the journal yourself.
 
-The most important line is usually **Active**.
+## Listing units
 
-List all services:
+```
+systemctl list-units --type=service          # only services
+systemctl list-units --type=service --state=failed   # only broken ones
+```
 
-`systemctl list-units --type=service`
+On a healthy machine, `--state=failed` prints nothing. On a broken one, it prints exactly what you need to look at.
 
-List failed services:
+## Unit file structure
 
-`systemctl list-units --type=service --state=failed`
+So far you've only used systemd to control units that already exist. When you want to add your own service, you write a **unit file**.
 
-On a healthy system, the failed-services command may return no results.
+Unit files for local services live under `/etc/systemd/system/`. Any file ending in `.service` is a service unit. A minimal one looks like this:
 
-## 7. Creating a service unit
+```
+[Unit]
+Description=My tiny service
+After=network.target
 
-Local service unit files are commonly stored in `/etc/systemd/system/`.
+[Service]
+ExecStart=/usr/local/bin/mytool
+Restart=on-failure
+Type=simple
 
-A unit file normally contains three sections:
+[Install]
+WantedBy=multi-user.target
+```
 
-### `[Unit]`
+Three sections:
 
-Defines metadata and startup ordering.
+- `[Unit]` - description and startup ordering. `After=` says "start this after the network is up".
+- `[Service]` - what to run (`ExecStart=` with the full path to the command or script), how to run it (`Type=simple` for a normal foreground program), what to do if it crashes (`Restart=on-failure`).
+- `[Install]` - how to hook it into "start on boot". `WantedBy=multi-user.target` is systemd's shorthand for "the normal running state".
 
-- `Description=` — explains the service
-- `After=network.target` — starts the service after the network target
+Whenever you add or change a unit file, systemd doesn't notice on its own. You have to tell it:
 
-### `[Service]`
+```
+sudo systemctl daemon-reload
+```
 
-Defines how the program runs.
+After that, `systemctl enable --now myservice.service` starts it and wires it up for future boots.
 
-- `ExecStart=` — full path to the executable or script
-- `Type=simple` — normal foreground process
-- `Restart=on-failure` — restart if the process exits unsuccessfully
 
-### `[Install]`
 
-Defines how the service connects to the boot process.
+# journalctl
 
-- `WantedBy=multi-user.target` — starts during the normal multi-user boot state
+systemd captures everything a service prints - its normal output and its error messages - and stores it in the **journal**. `journalctl` is how you read it.
 
-After adding or changing a unit file, reload systemd’s configuration with:
+## Per-service logs
 
-`sudo systemctl daemon-reload`
+```
+journalctl -u ssh                  # everything ssh has ever logged
+journalctl -u ssh --since today    # since midnight today
+journalctl -u ssh --since '1 hour ago'
+journalctl -u ssh -n 100           # last 100 lines
+```
 
-Then enable and start the service with:
+`-u` stands for "unit", the same names you'd pass to `systemctl`.
 
-`sudo systemctl enable --now myservice.service`
+A couple of lines of output look like this:
 
-## 8. Viewing logs with `journalctl`
+```
+Jul 28 09:14:01 host sshd[512]: Server listening on 0.0.0.0 port 22.
+Jul 28 09:20:44 host sshd[788]: Accepted password for root from 10.0.0.5
+```
 
-Systemd captures standard output and error output from services in the journal.
+Each line is a timestamp, the hostname, the program with its PID in brackets, then the message the program logged. The newest entries sit at the bottom, and `journalctl` jumps straight there by default.
 
-### Common commands
+## Follow in real time
 
-| Command | Purpose |
-| --- | --- |
-| `journalctl -u ssh` | Show all logs for a unit |
-| `journalctl -u ssh --since today` | Show logs since midnight |
-| `journalctl -u ssh --since '1 hour ago'` | Show recent logs |
-| `journalctl -u ssh -n 100` | Show the last 100 entries |
-| `journalctl -u ssh -f` | Follow logs in real time |
-| `journalctl -u nginx -p err` | Show errors and more severe messages |
-| `journalctl -u nginx -b` | Show messages from the current boot |
-| `journalctl -u nginx -o cat` | Show only log messages |
+```
+journalctl -u ssh -f
+```
 
-A useful troubleshooting command is:
+Same idea as `tail -f` from the reading-files topic, but scoped to a single service. This is the command you leave running in another terminal while you change a config and watch the service react to it.
 
-`journalctl -u nginx -p err --since '1 hour ago'`
+## Useful filters
 
-## 9. Following logs in real time
+- `-p err` - errors and worse only
+- `--since '2 hours ago'` - time window
+- `-b` - only messages from the current boot
+- `-o cat` - strip the timestamp/hostname prefix, print only the message
 
-Use `journalctl -u service -f` to follow a service’s logs as new entries arrive.
+Combine them freely:
 
-This is useful when:
+```
+journalctl -u nginx -p err --since '1 hour ago'
+```
 
-1. Changing a service configuration
-2. Reloading or restarting the service
-3. Watching for errors or confirmation messages
+That's "nginx errors from the last hour", in one command. If something broke recently on a production server, this is usually the first thing you type.
 
-It is similar to `tail -f`, but specifically filters logs for a systemd unit.
+## Where the journal lives
 
-## 10. Where journal logs are stored
+Under `/var/log/journal/` as binary files. Don't try to read them directly, `journalctl` parses them for you. On some minimal systems `/var/log/journal/` doesn't exist and the journal lives in memory only, wiped on reboot. Worth knowing when you can't find yesterday's logs.
 
-Persistent journal files are commonly stored under `/var/log/journal/`.
-
-On some minimal systems, logs are stored only in memory. Those logs may disappear after reboot if persistent journaling is not configured.
-
-Do not read journal files directly; use `journalctl`.
-
-## Troubleshooting workflow
-
-1. Check status: `systemctl status service`
-2. Review recent errors: `journalctl -u service -p err --since '1 hour ago'`
-3. Check whether the service is enabled: `systemctl is-enabled service`
-4. Check whether it is running: `systemctl is-active service`
-5. Reload systemd after unit-file changes: `systemctl daemon-reload`
-6. Restart or reload the service as appropriate.
-7. Follow the logs with `journalctl -u service -f`.
-
-## Core mental model
-
-- `systemd` manages services.
-- `systemctl` controls services.
-- `journalctl` reads service logs.
-- `active` means running now.
-- `enabled` means configured to start at boot.
-- `daemon-reload` makes systemd recognize unit-file changes.
