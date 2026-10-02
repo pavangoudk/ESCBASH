@@ -1,167 +1,182 @@
-# Linux Networking Notes
+# Ps and interfaces
 
-## 1. IP addresses and interfaces
+Every machine on a network has one or more **network interfaces**. An interface is a lane the machine uses to send and receive traffic. Most Linux servers have at least two:
 
-A **network interface** is a connection used by a machine to send and receive traffic.
+- `lo` - the **loopback**, address `127.0.0.1`. Traffic that never leaves the machine (one process talking to another on the same box) goes here.
+- `eth0` (or `ens3`, `enp0s3`, depends on the naming scheme) - the main outbound interface, with the machine's real network address.
 
-Common interfaces:
+## Listing interfaces
 
-- `lo` — loopback interface, usually `127.0.0.1`; traffic stays on the local machine.
-- `eth0`, `ens3`, or `enp0s3` — physical or virtual network interface used for external traffic.
+The modern command is `ip`:
 
-Useful commands:
+```
+ip addr show           # long form
+ip a                   # short form, same result
+```
 
-- `ip addr show` or `ip a` — display interfaces and addresses.
-- `hostname -I` — print the machine’s IP addresses only.
+You'll see one block per interface. The key line for each is `inet <address>/<mask>`, which is the IPv4 address:
 
-An address such as `10.0.2.15/24` means:
+```
+inet 10.0.2.15/24 brd 10.0.2.255 scope global dynamic eth0
+```
 
-- `10.0.2.15` is the IPv4 address.
-- `/24` identifies the network size.
+`10.0.2.15` is the machine's IP on that interface. `/24` is the size of the network it belongs to.
 
-`ifconfig` is an older tool. Prefer `ip` on modern Linux systems.
+## Printing just the IP with hostname -I
 
-## 2. Ports and listening services
+If you only need the IP:
 
-An IP address identifies a machine. A **port** identifies a service on that machine.
+```
+hostname -I
+```
 
-Common ports:
+Prints only IP addresses, space-separated. Perfect for scripts.
 
-| Port | Typical service |
-| --- | --- |
-| `22` | SSH |
-| `80` | HTTP |
-| `443` | HTTPS |
-| `5432` | PostgreSQL |
-| `6379` | Redis |
+## What about ifconfig?
 
-Ports range from `0` through `65535`.
+The older command, still floating around in tutorials. Not installed by default on modern Ubuntu. Use `ip a` and don't look back.
 
-### TCP and UDP
+# Ports and listening
 
-- **TCP:** Connection-oriented, ordered, and reliable; commonly used by HTTP, SSH, and databases.
-- **UDP:** Connectionless and lightweight; commonly used by DNS, VoIP, and some games.
+An IP address gets you to a machine. A **port** gets you to a specific service on that machine. Ports are 16-bit numbers (0 to 65535). Common examples:
 
-### Find listening sockets
+- **22** - SSH
+- **80** - HTTP
+- **443** - HTTPS
+- **5432** - PostgreSQL
+- **6379** - Redis
 
-Use `ss -tlnp`.
+## TCP vs UDP
 
-Options:
+Two flavors of traffic. **TCP** is connection-based, ordered, and retries on packet loss. HTTP, SSH, and most databases use TCP. **UDP** is fire-and-forget. DNS, VoIP, and some game protocols use UDP. As a DevOps engineer you'll deal with TCP almost every time.
 
-- `-t` — TCP only
-- `-l` — listening sockets only
-- `-n` — show numeric ports and addresses
-- `-p` — show the owning process
+## Seeing what's listening
 
-This helps answer: **Which process is using this port?**
+`ss` (socket statistics) is the modern tool.
 
-### Understanding bind addresses
+```
+ss -tlnp
+```
 
-- `0.0.0.0:80` — listens on port 80 on all IPv4 interfaces.
-- `127.0.0.1:5432` — listens only on the local machine.
+Four flags you'll always use together:
 
-If a service cannot be reached remotely, check whether it is bound to `127.0.0.1` instead of an external interface or `0.0.0.0`.
+- `-t` - TCP only
+- `-l` - listening sockets only
+- `-n` - don't resolve port numbers to service names (faster and clearer)
+- `-p` - show which process owns the socket
 
-`netstat -tlnp` is the older equivalent of `ss -tlnp`.
+This machine runs an nginx web server, so port 80 shows up when you run it yourself:
 
-## 3. Testing connectivity with `ping`
+```
+State  Recv-Q Send-Q Local Address:Port  Peer Address:Port  Process
+LISTEN 0      511    0.0.0.0:80          0.0.0.0:*          users:(("nginx",pid=1234,fd=6))
+LISTEN 0      128    0.0.0.0:22          0.0.0.0:*          users:(("sshd",pid=1500,fd=3))
+```
 
-`ping` tests basic network reachability.
+Read it one line at a time. The first line says a process named `nginx` is listening on port 80. The second says `sshd` is listening on port 22. The `Process` column ties each open port back to the program that opened it, which is exactly what you want when you're hunting down "what is using this port?"
 
-- `ping -c 4 127.0.0.1` — send four packets to the local machine.
-- `ping -c 4 example.com` — test reachability to a remote host.
+## 0.0.0.0 vs 127.0.0.1 in the Local Address
 
-A successful remote ping generally shows that:
+The single most useful distinction to recognize:
 
-1. The hostname resolved.
-2. A network route exists.
-3. The remote host responded.
+- `0.0.0.0:80` means "listen on port 80 on every interface". Anyone who can reach the machine over the network can connect. That's why nginx shows up this way above.
+- `127.0.0.1:5432` means "listen on the loopback only". Only processes on this same machine can connect. A database bound like this is reachable from the box itself but not from outside.
 
-A failed ping does **not** always mean the host is down. Firewalls and networks may intentionally block ICMP traffic.
+When a service is "unreachable from another machine," a common cause is that it bound to `127.0.0.1` when you needed `0.0.0.0`. `ss -tlnp` shows you that in one line.
 
-## 4. Testing HTTP with `curl`
+## netstat, if you meet it
 
-`curl` communicates with HTTP services.
+The older equivalent of `ss`. Same idea, older syntax (`netstat -tlnp`). Use `ss` unless you're on a system that lacks it, which is rare in 2026.
 
-Common commands:
 
-- `curl http://localhost` — retrieve the response body.
-- `curl -I http://localhost` — retrieve response headers only.
-- `curl -v http://localhost` — display detailed connection and request information.
+# Reaching other machines
 
-`curl -I` is useful for quickly checking whether a web service returns a status such as `HTTP/1.1 200 OK`.
+Three commands cover almost every "can I reach that machine?" check: `ping` tests raw reachability, `curl` speaks HTTP, and `dig` (or `getent`) resolves names to IP addresses.
 
-`curl -v` helps troubleshoot connection, request, and response problems.
+## ping: test raw reachability
 
-If `curl` is unavailable, `wget -qO- http://localhost` can retrieve the page content.
+Start with the machine itself. The loopback address always answers, so this works with no internet at all:
 
-## 5. Resolving hostnames
+```
+ping -c 4 127.0.0.1
+```
 
-### `dig`
+`-c 4` sends four packets and stops. You'll see four reply lines and a summary that says `0% packet loss`.
 
-`dig` queries DNS directly.
+To reach a remote machine, hand ping a name or an IP instead:
 
-- `dig example.com` — detailed DNS response.
-- `dig +short example.com` — display only the returned IP addresses.
+```
+ping -c 4 example.com
+```
 
-`dig` requires access to a DNS server and does not normally check `/etc/hosts`.
+A successful ping to a remote host proves three things at once: the name resolved to an IP, the network path works, and the remote machine is answering. That second example needs working internet and DNS, so it fails on a machine with no outside access. Some networks also block ping on purpose, so a failed ping by itself doesn't prove a machine is down.
 
-### `getent hosts`
+## curl: talk HTTP
 
-`getent hosts` uses the system’s configured resolver.
+This machine runs an nginx web server on port 80, so you can talk to it with no internet at all:
 
-- It checks `/etc/hosts`.
-- It can query DNS when necessary.
-- It is useful for confirming local hostname mappings.
+```
+curl http://localhost
+```
 
-Example: `getent hosts localhost` typically returns `127.0.0.1 localhost`.
+That prints the HTML of the nginx welcome page. The same two flags cover most of the rest of your HTTP work:
 
-### Key difference
+```
+curl -I http://localhost
+curl -v http://localhost
+```
 
-| Tool | Main behavior |
-| --- | --- |
-| `dig` | Queries DNS directly |
-| `getent hosts` | Uses the system resolver, including `/etc/hosts` |
+- `-I` sends a HEAD request and prints only the response headers. Fastest way to answer whether the service is returning 200. The first line reads `HTTP/1.1 200 OK`.
+- `-v` is verbose. It shows every step: the connection, the request headers you sent, and the response headers you got back. Reach for it when something is going wrong.
 
-## 6. The `/etc/hosts` file
+Point curl at a public URL like `https://example.com` the same way, but that one needs working internet.
 
-`/etc/hosts` provides local hostname-to-IP mappings. Linux commonly checks it before DNS.
+If curl isn't installed, wget fetches the same page:
 
-Example entry:
+```
+wget -qO- http://localhost
+```
 
-`127.0.0.1 api.local`
+## Resolving names to IPs
 
-Add an entry with:
+`dig` asks a DNS server to turn a name into an IP. It queries that server over the network, so it needs working internet:
 
-`echo "127.0.0.1 api.local" >> /etc/hosts`
+```
+dig example.com
+dig +short example.com
+```
 
-Confirm it with:
+Plain `dig` prints a detailed answer; `+short` prints just the IPs. `dig` is the DevOps standard, but on a machine with no outside access it times out instead of answering.
 
-`getent hosts api.local`
+`getent hosts` is the offline-friendly alternative. It goes through the system resolver, which checks `/etc/hosts` first and only then asks DNS, so a local name answers instantly with no network:
 
-Then test the local web service with:
+```
+getent hosts localhost
+```
 
-`curl http://api.local`
+That prints `127.0.0.1 localhost`. One important difference: `dig` only ever queries DNS servers, so it never sees names you put in `/etc/hosts`. `getent` does. When you want to confirm a `/etc/hosts` entry, `getent` is the tool.
 
-This technique is useful for local development and testing hostname-based configurations.
+## /etc/hosts
 
-## Troubleshooting workflow
+Before DNS existed, hostnames were mapped to IPs in a plain text file. That file still exists as `/etc/hosts`, and Linux checks it before asking any DNS server. It's handy for testing.
 
-1. Check interfaces and addresses with `ip a`.
-2. Confirm the local IP with `hostname -I`.
-3. Check whether the service is listening with `ss -tlnp`.
-4. Verify the service is bound to the correct address.
-5. Test basic reachability with `ping`.
-6. Test HTTP behavior with `curl -I` or `curl -v`.
-7. Resolve names with `dig` or `getent hosts`.
-8. Check `/etc/hosts` when testing local hostname overrides.
+Add a line that points `api.local` at the loopback. Appending to `/etc/hosts` needs root, and you're logged in as root here:
 
-## Core mental model
+```
+echo "127.0.0.1  api.local" >> /etc/hosts
+```
 
-- **Interface:** Where traffic enters or leaves.
-- **IP address:** Which machine to reach.
-- **Port:** Which service to reach.
-- **`ss`:** What is listening.
-- **`ping`:** Can the host respond?
-- **`curl`:** Does the HTTP service work?
-- **`dig` / `getent`:** What IP does the hostname resolve to?
+Confirm the resolver picked it up:
+
+```
+getent hosts api.local
+```
+
+That prints `127.0.0.1 api.local`. The name now points at this machine, where nginx is listening on port 80, so a request to it gets a real answer back:
+
+```
+curl http://api.local
+```
+
+Setting local overrides like this is a standard trick during development.
+
