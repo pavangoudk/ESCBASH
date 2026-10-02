@@ -1,24 +1,26 @@
-# Linux Notes: `grep` and `find`
+# grep for finding text in a file
 
-## 1. `grep`: Search inside files
+`grep` searches for a pattern inside a file and prints every line that matches. It is one of the commands you will reach for most as a DevOps engineer. Log files run to thousands of lines, config files are full of settings you don't care about, and command output can scroll off the screen. `grep` pulls out only the lines that matter.
 
-`grep` searches for a pattern inside a file and prints every matching line.
+When a service breaks, the first move is almost always to `grep` the logs for the word `error`. When you need to know how a setting is configured, you `grep` the config file for it. Learning `grep` well pays off every single day.
 
-### Basic syntax
+## The basic form
 
 ```
 grep pattern file
 ```
 
-Example:
+You give it a pattern (the text to look for) and a file (where to look). Try it on `/etc/passwd`, a file that lists the accounts on the system:
 
 ```
 grep root /etc/passwd
 ```
 
-This prints every line in `/etc/passwd` containing `root`.
+That prints every line of `/etc/passwd` containing the word `root`. Usually more than one line comes back, because "root" appears in system paths too.
 
-## 2. Creating a demo log file
+## Prepare a demo log file
+
+Real logs are long and messy, so let's make a small one you can predict. Run these commands to create a log file with a few lines in it:
 
 ```
 mkdir -p /tmp/grep-demo
@@ -31,218 +33,166 @@ echo "error disk space low" >> app.log
 echo "Service healthy" >> app.log
 ```
 
-The file contains six lines. Search for lowercase `error`:
+Now `app.log` has six lines. Search it for the word `error`:
 
 ```
 grep error app.log
 ```
 
-Only the lowercase match is returned because `grep` is case-sensitive by default.
+You get back only one line:
 
-## 3. Important `grep` options
+```
+error disk space low
+```
 
-| Option | Purpose | Example |
-| --- | --- | --- |
-| `-i` | Ignore uppercase/lowercase differences | `grep -i error app.log` |
-| `-n` | Show matching line numbers | `grep -n error app.log` |
-| `-c` | Count matching lines | `grep -c error app.log` |
-| `-v` | Show lines that do not match | `grep -v error app.log` |
-| `-r` | Search recursively through directories | `grep -r "listen" /etc/nginx/` |
-| `-l` | Print only filenames with matches | `grep -r -l "PermitRootLogin" /etc/` |
-| `--include` | Restrict recursive search to matching filenames | `grep -r --include='*.conf' "listen" /etc/` |
+Notice the line with `ERROR` (in capitals) did **not** match. By default `grep` cares about upper- and lower-case. That is exactly the kind of thing the flags below fix.
 
-### Common examples
+## The four flags you'll use daily
 
-Case-insensitive search:
+### -i — ignore case
+
+`-i` makes the search case-insensitive, so `error`, `Error`, and `ERROR` all match. Run:
 
 ```
 grep -i error app.log
 ```
 
-Show line numbers:
+Now both error lines come back:
+
+```
+ERROR failed to connect to database
+error disk space low
+```
+
+Almost always what you want when searching logs, because you rarely know how the message was capitalised.
+
+### -n — show line numbers
+
+`-n` prints the line number in front of each match, so you know where in the file it lives:
 
 ```
 grep -in error app.log
 ```
-
-Expected output:
 
 ```
 3:ERROR failed to connect to database
 5:error disk space low
 ```
 
-Count matches:
+The matches are on lines 3 and 5. Handy when you want to open the file at that spot in an editor.
+
+### -c — count matches
+
+`-c` skips the matching lines and just prints how many there were:
 
 ```
 grep -ic error app.log
 ```
 
-Expected result: `2`
+```
+2
+```
 
-Show everything except matching lines:
+Two lines matched. Good for questions like "how many errors are in this log?" without scrolling through them all.
+
+### -v — invert the match
+
+`-v` flips the meaning: it prints every line that does **not** match the pattern. Print everything except the error lines:
 
 ```
 grep -iv error app.log
 ```
 
-## 4. Combining `grep` options
-
-Options can be combined:
-
 ```
-grep -in error app.log
-grep -ni error app.log
-grep -i -n error app.log
+Starting web service on port 8080
+User alice logged in
+Retrying database connection
+Service healthy
 ```
 
-These commands are equivalent. Option order generally does not matter.
+A common use is stripping comment lines from a config file. Comments usually start with `#`, so this leaves only the settings that apply:
 
-## 5. Searching across multiple files
+```
+grep -v '^#' /etc/hosts
+```
 
-Use `-r` to search recursively through a directory:
+## Combining flags
+
+Flags stack. You saw `-i` and `-n` together as `-in`, and `-i` with `-c` as `-ic`. Order doesn't matter, `grep -in`, `grep -ni`, and `grep -i -n` all do the same thing.
+
+# grep across many files
+
+Point grep at a folder with `-r` (recursive) and it walks every file underneath, searching each one.
 
 ```
 grep -r "listen" /etc/nginx/
 ```
 
-Results typically appear in this format:
+Every match prints as `filename:line`. That "which file mentioned this?" answer is why DevOps engineers reach for `grep -r` constantly.
+
+## Narrowing the search
+
+Two flags pay for themselves:
+
+- `-l` prints only the filenames that had at least one match.
+- `--include='*.conf'` restricts the search to files matching a glob.
 
 ```
-Plain textfilename:line containing the match
+grep -r -l "PermitRootLogin" /etc/           # which files mention this setting
+grep -r --include='*.conf' "listen" /etc/    # only .conf files under /etc
 ```
 
-Search only configuration files:
+## Piping into grep
+
+grep isn't only for files. It filters any stream of text, which pairs perfectly with the commands you already know:
 
 ```
-grep -r --include='*.conf' "listen" /etc/
+ps aux | grep nginx                 # any nginx processes running?
+history | grep ssh                  # ssh commands from your history (empty on a brand-new shell)
+ls /etc | grep -i network           # entries in /etc whose name mentions "network"
 ```
 
-Show only files containing a match:
+The pattern is always: something produces lines, `grep` keeps the ones that matter.
 
-```
-grep -r -l "PermitRootLogin" /etc/
-```
+# find for locating files
 
-## 6. Using `grep` with pipes
+`grep` searches inside files. `find` locates the files themselves.
 
-`grep` can filter the output of another command.
-
-```
-ps aux | grep nginx
-history | grep ssh
-ls /etc | grep -i network
-```
-
-The general pattern is:
-
-```
-Plain textcommand that produces output | grep pattern
-```
-
-This is useful for filtering processes, command history, directory listings, and logs.
-
-# 7. `find`: Locate files and directories
-
-`find` searches for files and directories based on conditions.
-
-### Basic syntax
+## Basic shape
 
 ```
 find <path> [conditions]
 ```
 
-Unlike `grep`, which searches inside files, `find` locates the files themselves.
+The conditions you'll use most often:
 
-## 8. Common `find` conditions
+- `-name 'pattern'` - filename (case-sensitive). Wildcards work but you must quote them.
+- `-iname 'pattern'` - filename (case-insensitive).
+- `-type f` - regular files only.
+- `-type d` - directories only.
 
-| Condition | Purpose |
-| --- | --- |
-| `-name 'pattern'` | Find names using case-sensitive matching |
-| `-iname 'pattern'` | Find names using case-insensitive matching |
-| `-type f` | Search for regular files |
-| `-type d` | Search for directories |
-
-### Examples
-
-Find a specific file:
+## Everyday recipes
 
 ```
-find /etc -name 'nginx.conf'
+find /etc -name 'nginx.conf'             # a specific file under /etc
+find /etc -name '*.conf'                 # every .conf file under /etc
+find / -type d -name 'nginx'             # a directory anywhere on the machine
+find /var/log -type f -name '*.log'      # regular log files under /var/log
 ```
 
-Find all `.conf` files:
+## Always quote the pattern
+
+If you leave the glob unquoted, the shell expands it before `find` sees it. You'll either miss matches or get an error.
 
 ```
-find /etc -name '*.conf'
+find /etc -name '*.conf'      # correct
+find /etc -name *.conf        # wrong, shell expanded *.conf first
 ```
 
-Find a directory:
+## When to reach for find vs grep
 
-```
-find / -type d -name 'nginx'
-```
+- "Where is a file called X?" - `find`.
+- "Which files contain the string X?" - `grep -r`.
 
-Find regular log files:
+You'll sometimes want both: `find` locates the candidates, `grep` searches inside them. That combination is worth adding to your muscle memory once each command feels natural on its own.
 
-```
-find /var/log -type f -name '*.log'
-```
-
-## 9. Always quote wildcard patterns
-
-Quote patterns containing wildcards such as `*`.
-
-Correct:
-
-```
-find /etc -name '*.conf'
-```
-
-Incorrect:
-
-```
-find /etc -name *.conf
-```
-
-Without quotes, the shell may expand `*.conf` before `find` receives it, causing errors or unexpected results.
-
-## 10. `grep` versus `find`
-
-| Question | Command |
-| --- | --- |
-| Where is a file named `nginx.conf`? | `find` |
-| Which files contain the word `listen`? | `grep -r` |
-| Which `.conf` files contain `listen`? | `grep -r --include='*.conf'` |
-
-### Key distinction
-
-- **`find` locates files based on their names, types, or paths.**
-- **`grep` searches for text inside files or command output.**
-
-A useful mental model:
-
-```
-Plain textfind = Which files?
-grep = Which lines?
-```
-
-## Quick reference
-
-```
-grep pattern file
-grep -i pattern file
-grep -n pattern file
-grep -c pattern file
-grep -v pattern file
-grep -r pattern directory
-grep -r -l pattern directory
-find path -name 'pattern'
-find path -iname 'pattern'
-find path -type f
-find path -type d
-```
-
-### Practical takeaway
-
-Start with `find` when you need to locate a file. Start with `grep` when you need to inspect its contents. In day-to-day DevOps work, combining both tools helps you quickly locate configuration settings, investigate logs, and troubleshoot services.
