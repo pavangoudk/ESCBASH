@@ -1,906 +1,158 @@
-# Linux System Monitoring — Uptime, Memory and Processes
+# Uptime and load average
 
-```text
-uptime  → Is the server under load?
-free    → Does the server have enough memory?
-top     → Which process is causing the problem?
 ```
-
----
-
-# 1. `uptime`
-
-Run:
-
-```bash
 uptime
 ```
 
-Example:
+Prints one line:
 
-```text
-19:15:42 up 3 days, 4:12, 2 users, load average: 0.42, 0.55, 0.61
+```
+ 19:15:42 up 3 days,  4:12,  2 users,  load average: 0.42, 0.55, 0.61
 ```
 
-This gives you three important pieces of information.
+Three pieces:
 
-### 1. Current time
+- **How long the machine has been up.** Handy when someone asks "when was this last rebooted?"
+- **Users currently logged in.** Anyone besides you.
+- **Load average.** The three numbers on the right, and the useful part.
 
-```text
-19:15:42
+## What load average means
+
+The three numbers are the load average over the last **1 minute**, **5 minutes**, and **15 minutes**. Each number is roughly the average count of processes wanting the CPU during that window.
+
+The trick is comparing to the number of CPU cores:
+
+- Load **below** the core count means the machine has capacity to spare.
+- Load **around** the core count means fully utilized.
+- Load **above** the core count means processes are queuing for CPU.
+
+A load of 4.0 on an 8-core box is 50% utilization, healthy. The same load on a 2-core box means it's overloaded. Always compare load against `nproc`:
+
 ```
-
-The current server time.
-
-### 2. How long the server has been running
-
-```text
-up 3 days, 4:12
-```
-
-The server has been running for 3 days and 4 hours 12 minutes since the last reboot.
-
-Useful when someone asks:
-
-> "When was this server last restarted?"
-
-### 3. Load average
-
-```text
-0.42, 0.55, 0.61
-```
-
-This is the most important part.
-
----
-
-# 2. What is Load Average?
-
-The three numbers represent:
-
-```text
-0.42 → Last 1 minute
-0.55 → Last 5 minutes
-0.61 → Last 15 minutes
-```
-
-Load average basically tells you how much work is waiting to be processed.
-
-But there is one very important point:
-
-> **Always compare load average with the number of CPU cores.**
-
-Check CPU cores using:
-
-```bash
 nproc
 ```
 
-Example:
+Prints the core count in one number.
 
-```text
-4
+## Reading the three numbers together
+
+- 1-min rising, 15-min low: something just started spiking. May resolve on its own.
+- 1-min low, 15-min high: things were bad, calming down now.
+- All three high: sustained overload, time to investigate.
+
+Load average tells you the machine is busy. It doesn't tell you what's making it busy. That's what `top` is for, coming up next.
+
+## The raw source: /proc/loadavg
+
+The three numbers `uptime` prints come from a file the kernel keeps updated in real time:
+
 ```
-
-That means the server has **4 CPU cores**.
-
----
-
-# 3. Understanding Load with CPU Cores
-
-Suppose:
-
-```bash
-nproc
-```
-
-returns:
-
-```text
-4
-```
-
-You have 4 CPU cores.
-
-### Load = 1
-
-```text
-Load: 1
-CPU cores: 4
-```
-
-There is plenty of capacity.
-
-### Load = 4
-
-```text
-Load: 4
-CPU cores: 4
-```
-
-The system is roughly fully occupied.
-
-### Load = 8
-
-```text
-Load: 8
-CPU cores: 4
-```
-
-There is more work than the available CPU capacity, so processes can be waiting.
-
----
-
-# 4. Same Load Can Mean Different Things
-
-Suppose load average is:
-
-```text
-4.0
-```
-
-On an **8-core server**:
-
-```text
-4 / 8 = 50%
-```
-
-There is still CPU capacity.
-
-But on a **2-core server**:
-
-```text
-4 / 2 = 200%
-```
-
-There is significant contention.
-
-So don't look at:
-
-```text
-load average = 4
-```
-
-and immediately say:
-
-> "The server is overloaded."
-
-First check:
-
-```bash
-nproc
-```
-
----
-
-# 5. Reading 1, 5 and 15 Minute Load
-
-Suppose:
-
-```text
-load average: 5.0, 2.0, 1.0
-```
-
-Think:
-
-```text
-1 minute  → 5.0
-5 minutes → 2.0
-15 minutes → 1.0
-```
-
-The **1-minute value is much higher**.
-
-That suggests something has recently become busy.
-
-Maybe:
-
-* A deployment started
-* A batch job started
-* Traffic increased
-* CPU-intensive processing started
-
----
-
-### Opposite situation
-
-```text
-load average: 1.0, 2.0, 5.0
-```
-
-The 15-minute value was high, but the current 1-minute value is low.
-
-That suggests:
-
-> The system was busy earlier but is now calming down.
-
----
-
-### All three high
-
-```text
-load average: 5.0, 5.2, 5.1
-```
-
-This suggests the system has been under sustained load.
-
-Now you should investigate.
-
----
-
-# 6. Important: Load Average Doesn't Tell You the Cause
-
-Suppose:
-
-```bash
-uptime
-```
-
-shows:
-
-```text
-load average: 7.5, 7.2, 7.0
-```
-
-You know:
-
-> The system is experiencing significant load.
-
-But you don't yet know **why**.
-
-Possible causes could include:
-
-* CPU-intensive process
-* Too many processes
-* Disk I/O activity
-* Application workload
-* Background jobs
-
-So the next tool is:
-
-```bash
-top
-```
-
----
-
-# 7. `/proc/loadavg`
-
-Linux maintains the load information in:
-
-```text
-/proc/loadavg
-```
-
-You can see it with:
-
-```bash
 cat /proc/loadavg
 ```
 
-Example:
+You'll see something like `0.42 0.55 0.61 2/312 4567` - the three load averages, then the count of runnable/total processes, then the last PID created. Scripts that need just the numbers (with no parsing) read `/proc/loadavg` directly instead of picking values out of the `uptime` line.
 
-```text
-0.42 0.55 0.61 2/312 4567
+
+
+# Memory with free
+
 ```
-
-The first three numbers are:
-
-```text
-0.42 → 1 minute
-0.55 → 5 minutes
-0.61 → 15 minutes
-```
-
-The remaining information provides process-related details.
-
-For normal troubleshooting, you don't need to memorize everything after the first three numbers.
-
----
-
-# 8. Memory with `free`
-
-Now suppose the problem isn't CPU.
-
-Maybe the application is running out of memory.
-
-Use:
-
-```bash
 free -h
 ```
 
-Example:
+`-h` prints human-readable units.
 
-```text
-              total   used   free   shared   buff/cache   available
-Mem:           2.0Gi   200Mi  1.2Gi   0.0Ki     500Mi        1.7Gi
-Swap:             0B     0B     0B
+```
+              total        used        free      shared  buff/cache   available
+Mem:           2.0Gi       200Mi       1.2Gi       0.0Ki       500Mi       1.7Gi
+Swap:             0B          0B          0B
 ```
 
----
+Six columns, but only two really matter to you.
 
-# 9. Understanding `free`
+## used vs free vs available
 
-The output has several columns.
+- **used** - memory currently held by processes.
+- **free** - memory the kernel hasn't touched at all. Usually a small number, which is fine.
+- **available** - memory that could be given to a new process, including buff/cache that the kernel would release if needed.
 
-The important ones are:
+Always look at "available", not "free". A machine with 200 MiB free but 1.7 GiB available has plenty of memory. Linux uses idle RAM for filesystem cache, and releases it the moment a process needs it.
 
-```text
-total
-used
-free
-buff/cache
-available
+## buff/cache: not lost, just borrowed
+
+Linux happily uses spare memory to cache recently-read files. That's why "free" often looks tiny on an otherwise idle box. Unlike Windows or macOS, Linux treats unused RAM as wasted RAM.
+
+## Swap
+
+The `Swap:` row is disk-backed memory. On modern cloud VMs it's often zero or disabled. That's normal. If you see swap in active use on a box that has RAM available, something is misconfigured.
+
+## Extracting the available memory value
+
+For a health-check script, one line prints just the "available" value:
+
+```
+free -h | grep '^Mem:' | sed 's/.* //'
 ```
 
-But the most important number to focus on is:
+`grep '^Mem:'` keeps just the memory row, and `sed 's/.* //'` deletes everything up to the last space, leaving the final column, which is "available".
 
-> **available**
 
----
 
-# 10. `used` vs `free` vs `available`
+# top and htop
 
-### `used`
+`top` is the interactive dashboard for what's running right now.
 
-Memory currently being used by processes and the system.
-
-### `free`
-
-Memory that is completely unused.
-
-### `available`
-
-Memory that Linux can make available to applications when required.
-
-This is the important one.
-
----
-
-# 11. Why Can `free` Be Low?
-
-This confuses many beginners.
-
-Suppose:
-
-```text
-total      8 GB
-free       500 MB
-available  5 GB
 ```
-
-You might think:
-
-> "Only 500 MB is free! The server is almost out of memory."
-
-That's incorrect.
-
-Linux intentionally uses unused RAM for things like **filesystem cache**.
-
-So the operating system may have:
-
-```text
-Free memory → 500 MB
-Cache       → 4.5 GB
-Available   → 5 GB
-```
-
-If an application needs more memory, Linux can release some cache.
-
-Therefore:
-
-> **Don't panic just because `free` is low. Look at `available`.**
-
----
-
-# 12. What is buff/cache?
-
-Linux uses unused RAM to cache recently accessed data.
-
-For example:
-
-```text
-Application
-     ↓
-Reads file
-     ↓
-Linux keeps frequently used data in RAM
-     ↓
-Future access can be faster
-```
-
-This improves performance.
-
-So:
-
-> **RAM being used for cache isn't necessarily a problem.**
-
-Linux can reclaim that memory when applications need it.
-
----
-
-# 13. What is Swap?
-
-You may see:
-
-```text
-Swap:
-```
-
-Swap is disk space that can be used as memory when RAM becomes constrained.
-
-Think:
-
-```text
-RAM
- ↓
-Fast
- ↓
-Limited
-
-Swap
- ↓
-Disk
- ↓
-Much slower
-```
-
-Some cloud VMs have no swap configured:
-
-```text
-Swap: 0B
-```
-
-That isn't automatically a problem.
-
-But if a server is heavily using swap, you should investigate memory pressure and the system configuration.
-
----
-
-# 14. `top`
-
-Now imagine:
-
-```text
-uptime
-```
-
-tells you:
-
-> The server is under heavy load.
-
-And:
-
-```bash
-free -h
-```
-
-shows:
-
-> Memory looks okay.
-
-Now you want to know:
-
-> **Which process is causing the load?**
-
-Use:
-
-```bash
 top
 ```
 
-`top` gives you a live view of the system.
+You get a live-updating screen with two sections. The **summary** block at the top shows load average, CPU%, memory usage, and task counts. The **process list** underneath shows one row per process, sorted by CPU by default. Press `q` to quit.
 
-It contains two major areas:
+## Keys worth knowing inside top
 
-```text
-Summary
-   ↓
-CPU / Memory / Load / Tasks
+- `M` - sort by memory
+- `P` - sort by CPU (the default)
+- `k` - kill a process (asks for PID)
+- `1` - show per-CPU stats instead of aggregated
+- `h` - built-in help
 
-Processes
-   ↓
-Individual running processes
+## htop: a better top
+
+`htop` is a colored, scrollable, mouse-friendly version of top. It isn't installed on this machine, so you install it first:
+
 ```
-
----
-
-# 15. Understanding `top`
-
-The process section contains information such as:
-
-```text
-PID
-USER
-%CPU
-%MEM
-COMMAND
-```
-
-The most useful ones initially are:
-
-### PID
-
-Process ID.
-
-Every running process gets a PID.
-
-### `%CPU`
-
-How much CPU the process is consuming.
-
-### `%MEM`
-
-How much memory the process is consuming.
-
-### COMMAND
-
-The process/application name.
-
----
-
-# 16. Important `top` Keys
-
-While inside `top`:
-
-### `P`
-
-Sort by CPU usage.
-
-```text
-P → CPU
-```
-
-### `M`
-
-Sort by memory usage.
-
-```text
-M → Memory
-```
-
-### `k`
-
-Kill a process.
-
-It asks you for the PID.
-
-Be careful with this on production servers.
-
-### `1`
-
-Shows individual CPU information instead of just an aggregated CPU view.
-
-### `h`
-
-Shows help.
-
-### `q`
-
-Quit `top`.
-
----
-
-# 17. `htop`
-
-`htop` is an easier-to-use alternative to `top`.
-
-Install it:
-
-```bash
 sudo apt install -y htop
 ```
 
-Then:
+That command downloads the package, so it needs network access. If the install fails because the machine is offline, don't worry: everything below works with plain `top`, which is always there. Once htop is installed, run it:
 
-```bash
+```
 htop
 ```
 
-It provides a more interactive display.
+Same information as top, laid out more clearly. Sort by clicking column headers, kill with F9. Worth installing on any machine you plan to spend real time on.
 
-You can:
+## Running top in a script
 
-* Scroll
-* Sort processes
-* See CPU usage
-* See memory usage
-* Select processes
-* Kill processes
+top has a batch mode that prints one snapshot and exits, perfect for scripted health checks:
 
-For example, `F9` can be used to kill a selected process.
-
-### Important
-
-`htop` may not be installed by default.
-
-`top` is more universally available, so you should know **both**.
-
----
-
-# 18. Running `top` in Scripts
-
-Normally:
-
-```bash
-top
 ```
-
-opens an interactive screen.
-
-That's not useful inside a shell script.
-
-Instead:
-
-```bash
-top -b -n1
-```
-
-### `-b`
-
-Batch mode.
-
-It prints normal text instead of the interactive screen.
-
-### `-n1`
-
-Run only one iteration.
-
-So:
-
-```bash
-top -b -n1
-```
-
-means:
-
-> Give me one snapshot of the current system state and exit.
-
-You can combine it with:
-
-```bash
 top -b -n1 | head -20
 ```
 
-This keeps only the first 20 lines.
+Two separate flags do the work here:
 
-Useful for:
+- `-b` is batch mode, so top prints plain text instead of drawing the interactive screen.
+- `-n1` runs a single iteration and exits instead of updating forever.
 
-* Health-check scripts
-* Troubleshooting scripts
-* Automation
+Piping into `head -20` keeps just the first 20 lines, which is the summary block plus the busiest handful of processes.
 
----
+## Two more tools worth knowing
 
-# 19. `vmstat`
+Beyond top, two commands round out the basic toolkit:
 
-Another useful command is:
+- `vmstat` reports virtual memory and CPU activity over time. It ships with the same package as top and free, so it's already on this machine. Try `vmstat 1` to print a fresh line every second.
+- `iostat` reports disk read and write stats. It comes from the `sysstat` package, which isn't installed here. Add it with `sudo apt install -y sysstat` (needs network) when you want it.
 
-```bash
-vmstat 1
-```
+Both are worth learning once you're comfortable with top and free.
 
-It prints system statistics repeatedly.
-
-The `1` means:
-
-> Give me a new sample every 1 second.
-
-It provides information about things like:
-
-* Memory
-* Processes
-* CPU
-* System activity
-
-You don't need to master every column immediately.
-
-For now, remember:
-
-```text
-vmstat → overall system activity over time
-```
-
----
-
-# 20. `iostat`
-
-`iostat` is mainly useful for looking at **disk I/O**.
-
-For example:
-
-```text
-Is the application slow because the disk is busy?
-```
-
-`iostat` can help answer that.
-
-It may not be installed by default.
-
-Install it with:
-
-```bash
-sudo apt install -y sysstat
-```
-
-Then:
-
-```bash
-iostat
-```
-
-Remember:
-
-```text
-top     → processes / CPU / memory
-free    → memory
-vmstat  → system activity
-iostat  → disk I/O
-```
-
----
-
-# 21. Real-Time DevOps Troubleshooting Scenario
-
-Imagine you receive an alert:
-
-> "Production server is slow."
-
-Don't randomly restart things.
-
-Start with:
-
-### Step 1 — Check uptime/load
-
-```bash
-uptime
-```
-
-Suppose:
-
-```text
-load average: 6.5, 6.2, 5.8
-```
-
-Now check CPU cores:
-
-```bash
-nproc
-```
-
-Suppose:
-
-```text
-4
-```
-
-Load is significantly above the core count.
-
-So you investigate.
-
----
-
-### Step 2 — Check memory
-
-```bash
-free -h
-```
-
-Suppose:
-
-```text
-available: 6G
-```
-
-Memory looks reasonably available.
-
-So memory may not be the immediate problem.
-
----
-
-### Step 3 — Find the process
-
-```bash
-top
-```
-
-Sort by CPU using:
-
-```text
-P
-```
-
-You discover:
-
-```text
-%CPU
-95%
-```
-
-for an application process.
-
-Now you know:
-
-```text
-Server slow
-   ↓
-High load
-   ↓
-CPU is likely involved
-   ↓
-top
-   ↓
-Application process consuming CPU
-```
-
-Now you investigate **why that application is consuming CPU**, instead of blindly rebooting the server.
-
-That's the real DevOps mindset.
-
----
-
-# ⭐ Final Mental Model
-
-When troubleshooting a Linux server, remember:
-
-```text
-          SERVER PROBLEM
-                ↓
-          ┌─────┴─────┐
-          ↓           ↓
-        CPU          Memory
-          ↓           ↓
-       uptime       free -h
-          ↓
-         top
-          ↓
-   Find problematic process
-```
-
-And for the commands:
-
-| Command             | Main purpose                          |
-| ------------------- | ------------------------------------- |
-| `uptime`            | Uptime + load average                 |
-| `nproc`             | Number of CPU cores                   |
-| `cat /proc/loadavg` | Raw load-average information          |
-| `free -h`           | Memory usage                          |
-| `top`               | Live process/system monitoring        |
-| `htop`              | Easier interactive process monitoring |
-| `vmstat 1`          | System activity over time             |
-| `iostat`            | Disk I/O statistics                   |
-
-## ⭐ The 5 commands I'd memorize first
-
-```bash
-uptime
-```
-
-**Is the server under load?**
-
-```bash
-nproc
-```
-
-**How many CPU cores do I have?**
-
-```bash
-free -h
-```
-
-**Do I have enough memory?**
-
-```bash
-top
-```
-
-**Which process is causing the problem?**
-
-```bash
-df -h
-```
-
-**Do I have enough disk space?**
-
-Together, these commands give you a very solid **first-level Linux server troubleshooting toolkit**.
