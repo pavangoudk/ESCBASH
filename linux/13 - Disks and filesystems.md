@@ -1,907 +1,175 @@
-# 1. Disks, Partitions and Mount Points
+# Disks, partitions, and mount points
 
-Imagine you have an Ubuntu server with a **100 GB disk**.
+A Linux machine's storage stacks up in layers:
 
-At the physical/virtual level, you have a disk:
+- A **physical disk** (or virtual disk on a VM) is the raw hardware. Examples: `/dev/sda`, `/dev/nvme0n1`, `/dev/vda`.
+- A disk is carved into **partitions**. `/dev/sda1` is the first partition of `/dev/sda`.
+- Each partition holds a **filesystem** (ext4, xfs, btrfs, etc). The filesystem is what actually understands "files" and "folders".
+- The filesystem is **mounted** onto a folder in the tree. That folder is called a **mount point**. `/`, `/home`, `/var` are common ones.
 
-```text
-Disk
-/dev/sda
-100 GB
+When you write to `/var/log/app.log`, Linux checks which filesystem holds `/var`, sends the write to that filesystem, which stores it on its underlying partition on the disk.
+
+## lsblk: see the whole stack
+
 ```
-
-But Linux doesn't directly treat the entire disk as your normal file/folder structure.
-
-There are multiple layers.
-
-### The storage layers
-
-```text
-Physical / Virtual Disk
-        ↓
-    Partition
-        ↓
-   Filesystem
-        ↓
-   Mount Point
-        ↓
- Linux directories/files
-```
-
-Let's understand each one.
-
----
-
-## 1.1 Disk
-
-A disk is the actual storage device.
-
-On Linux you might see:
-
-```text
-/dev/sda
-/dev/vda
-/dev/nvme0n1
-```
-
-In a cloud environment, this is usually a **virtual disk**, even though Linux presents it like a block device.
-
-For example:
-
-```text
-/dev/sda
-   100 GB
-```
-
-Think:
-
-> **Disk = the complete storage device**
-
----
-
-# 1.2 Partition
-
-A disk can be divided into smaller sections called **partitions**.
-
-For example:
-
-```text
-/dev/sda
-100 GB
-│
-├── /dev/sda1 → 99 GB
-└── /dev/sda2 → 1 GB
-```
-
-Here:
-
-* `/dev/sda` = entire disk
-* `/dev/sda1` = first partition
-* `/dev/sda2` = second partition
-
-Think of it like a 100-acre piece of land divided into two plots.
-
----
-
-# 1.3 Filesystem
-
-A partition by itself doesn't understand things like:
-
-```text
-file
-folder
-permissions
-directories
-```
-
-A **filesystem** provides that structure.
-
-Common Linux filesystems include:
-
-```text
-ext4
-xfs
-btrfs
-```
-
-For example:
-
-```text
-/dev/sda1
-    ↓
-   ext4
-```
-
-Now Linux can store files and directories on it.
-
-Think:
-
-```text
-Partition = empty plot
-Filesystem = system that organizes the plot
-```
-
----
-
-# 1.4 Mount Point
-
-Now we need to make that filesystem available somewhere in Linux's directory tree.
-
-That's where **mounting** comes in.
-
-For example:
-
-```text
-/dev/sda1
-   ↓
-  ext4
-   ↓
-   /
-```
-
-`/` is the **mount point**.
-
-You can also have:
-
-```text
-/dev/sdb1
-   ↓
-  ext4
-   ↓
- /data
-```
-
-Now everything stored under `/data` is stored on that filesystem.
-
----
-
-# 1.5 Why Is This Important?
-
-Suppose your application writes:
-
-```text
-/var/log/app.log
-```
-
-Linux needs to determine:
-
-> Which filesystem contains `/var`?
-
-Suppose `/var` belongs to the root filesystem:
-
-```text
-/dev/sda1
-    ↓
-    /
-    ↓
-  /var
-    ↓
-app.log
-```
-
-The data ultimately gets stored on `/dev/sda1`.
-
-This becomes **very important in production troubleshooting**.
-
-For example:
-
-> "My application can't write logs."
-
-One possible reason is that the filesystem containing `/var` is full.
-
----
-
-# 2. `lsblk` — See Your Storage Structure
-
-The first command you should remember is:
-
-```bash
 lsblk
 ```
 
-It shows block devices in a tree structure.
+Prints every block device the kernel knows about, as a tree:
 
-Example:
-
-```text
-NAME    SIZE TYPE MOUNTPOINTS
-sda     100G disk
-├─sda1   99G part /
-└─sda2    1G part [SWAP]
+```
+NAME    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+sda       8:0    0  100G  0 disk
+├─sda1    8:1    0   99G  0 part /
+└─sda2    8:2    0    1G  0 part [SWAP]
 ```
 
-Read it like this:
+Reading it:
 
-```text
-sda
-100 GB disk
-│
-├── sda1
-│   99 GB partition
-│   mounted at /
-│
-└── sda2
-    1 GB partition
-    used for swap
+- `sda` is the disk, 100 GB.
+- `sda1` is the main partition, 99 GB, mounted at `/`.
+- `sda2` is a small partition holding swap.
+
+`lsblk` is your first stop when you want to know what storage exists before worrying about how full it is.
+
+Your own output will vary. A small cloud VM often shows a single device like `vda` with just one partition (or none), not the tidy multi-partition tree above. That's normal.
+
+## /etc/fstab, briefly
+
+`fstab` tells Linux what to mount where at boot:
+
+```
+/dev/sda1  /       ext4  defaults  0 1
 ```
 
-### Very important
+You'll edit it rarely. A broken `/etc/fstab` can prevent the machine from booting cleanly, so never touch it without checking your work twice.
 
-Don't expect your server to look exactly like this.
 
-A cloud VM might simply show:
 
-```text
-vda
-└── vda1
+# Disk usage with df and du
+
+Two commands, two very different questions.
+
+## df: how full each filesystem is
+
+Run this to see free space on every mounted filesystem:
+
 ```
-
-or even have a different layout.
-
-That's normal.
-
----
-
-# 3. What is `/etc/fstab`?
-
-There is a configuration file:
-
-```text
-/etc/fstab
-```
-
-It tells Linux:
-
-> "When the machine starts, mount these filesystems at these locations."
-
-For example:
-
-```text
-/dev/sda1    /    ext4    defaults    0 1
-```
-
-This means roughly:
-
-```text
-/dev/sda1
-   ↓
-mount it at
-   ↓
-/
-```
-
-### Why should you be careful?
-
-`/etc/fstab` is involved during boot.
-
-If you put an incorrect entry there, the machine may have problems mounting filesystems during startup.
-
-So:
-
-> **Never modify `/etc/fstab casually on a production server.**
-
----
-
-# 4. Now the Real Troubleshooting Part: `df` vs `du`
-
-Imagine your server suddenly reports:
-
-> Disk space is almost full!
-
-You need to answer two different questions.
-
-### Question 1
-
-**How full is the filesystem?**
-
-Use:
-
-```bash
 df -h
 ```
 
-### Question 2
+The `-h` flag means human-readable, so sizes come back as K, M, and G instead of raw block counts. You get one row per filesystem:
 
-**Which folder is consuming the space?**
-
-Use:
-
-```bash
-du
+```
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1        99G   14G   80G  15% /
+tmpfs           2.0G     0  2.0G   0% /dev/shm
 ```
 
-This distinction is extremely important.
+Read the `/dev/sda1` row left to right:
 
----
+- `Filesystem` is the device behind the mount, here `/dev/sda1`.
+- `Size` is the total capacity, 99G.
+- `Used` is what's taken, 14G.
+- `Avail` is what's still free, 80G.
+- `Use%` is used space as a percentage, 15%.
+- `Mounted on` is the folder this filesystem lives at, `/`.
 
-# 5. `df -h`
+`Use%` is the number you watch. When any real filesystem creeps past 80%, start planning. Past 95%, act now. The `tmpfs` rows are backed by memory rather than disk, so they're usually not worth worrying about.
 
-Run:
+df tells you how much room is left per filesystem. It never tells you which folder ate the space. For that you need du.
 
-```bash
-df -h
+## du: how big a folder is
+
+df measures whole filesystems. du measures a single folder by adding up the sizes of everything inside it. Point it at a path:
+
 ```
-
-Example:
-
-```text
-Filesystem      Size  Used  Avail  Use%  Mounted on
-/dev/sda1        99G   14G    80G   15%  /
-```
-
-Let's understand it:
-
-### Filesystem
-
-```text
-/dev/sda1
-```
-
-The device/filesystem being reported.
-
-### Size
-
-```text
-99G
-```
-
-Total capacity.
-
-### Used
-
-```text
-14G
-```
-
-Space currently used.
-
-### Avail
-
-```text
-80G
-```
-
-Available space.
-
-### Use%
-
-```text
-15%
-```
-
-Percentage used.
-
-### Mounted on
-
-```text
-/
-```
-
-Where that filesystem is mounted.
-
----
-
-# 6. Why `-h`?
-
-Without `-h`, the output may use less friendly units.
-
-With:
-
-```bash
-df -h
-```
-
-you get human-readable values like:
-
-```text
-99G
-14G
-80G
-```
-
-instead of difficult-to-read block values.
-
----
-
-# 7. What Should You Watch?
-
-The most important column is:
-
-```text
-Use%
-```
-
-For example:
-
-```text
-/dev/sda1   99G   90G   9G   91%   /
-```
-
-Now you know:
-
-> The filesystem is 91% full.
-
-You need to investigate what is consuming the space.
-
-And this is where `du` comes in.
-
----
-
-# 8. `du` — Find Folder Size
-
-`du` means **disk usage**.
-
-For example:
-
-```bash
 du -sh /var/log
 ```
 
-You might get:
+You get one line back, the total size of that folder:
 
-```text
-28M    /var/log
+```
+28M  /var/log
 ```
 
-This means:
+Two flags did the work:
 
-> `/var/log` is consuming approximately 28 MB.
+- `-s` summarizes the whole path into one number. Without it, du prints a separate line for every subfolder underneath.
+- `-h` uses human units (K, M, G) instead of raw kilobyte counts.
 
----
+Try it on a config folder to compare:
 
-# 9. Understanding `du -sh`
-
-There are two important options.
-
-### `-s`
-
-Means:
-
-**summary**
-
-Instead of showing every file and subdirectory, give me the total.
-
-### `-h`
-
-Means:
-
-**human-readable**
-
-So:
-
-```bash
-du -sh /var/log
+```
+du -sh /etc
 ```
 
-means:
-
-> Give me a human-readable summary of the total disk usage of `/var/log`.
-
----
-
-# 10. `df` vs `du`
-
-This is one of the most important concepts from this lesson.
-
-| Command  | Question it answers         |
-| -------- | --------------------------- |
-| `df -h`  | How full is the filesystem? |
-| `du -sh` | How big is this folder?     |
-
-Remember:
-
-```text
-df → Filesystem level
-du → Directory/file level
+```
+5.8M  /etc
 ```
 
-### Example
+Drop the `-s` when you want the breakdown instead of the total:
 
-You run:
-
-```bash
-df -h
+```
+du -h /var/log
 ```
 
-and discover:
+That recurses into every subfolder and prints a size for each one, which is how you find the specific folder that grew. The next node turns that into a repeatable search.
 
-```text
-/dev/sda1   100G   95G   5G   95%   /
+## Why df and du sometimes disagree
+
+`df` reads filesystem-level accounting. `du` walks the tree and adds up file sizes. They can disagree when:
+
+- A process still holds a **deleted file open**. df sees the space used, du doesn't see the file at all.
+- **Sparse files** exist. du sees the logical size, df sees the physical size on disk.
+
+That "df says 90% full, du says 30%" moment usually means someone deleted a huge log while an app was still writing to it. Restart the app and the space frees up.
+
+
+
+# Finding large folders with du
+
+`df` told you a filesystem is full. `du` will tell you which folder is at fault, if you point it at the right place.
+
+## The top-level scan
+
+Start at the mount that's full and drill down one level at a time:
+
 ```
-
-You know:
-
-> Something is consuming 95 GB.
-
-But `df` doesn't tell you **what**.
-
-So you start checking:
-
-```bash
-du -sh /var
-du -sh /home
-du -sh /opt
-du -sh /tmp
-```
-
-Now you can identify where the space is going.
-
----
-
-# 11. Finding the Exact Folder
-
-Suppose:
-
-```bash
-du -sh /var
-```
-
-returns:
-
-```text
-80G    /var
-```
-
-Now `/var` looks suspicious.
-
-Don't immediately delete anything.
-
-Go one level deeper:
-
-```bash
 sudo du -h --max-depth=1 /var 2>/dev/null | sort -h
 ```
 
-You might get:
+Three flags earning their keep:
 
-```text
-100M    /var/cache
-2G      /var/lib
-75G     /var/log
-80G     /var
+- `--max-depth=1` limits recursion to one level, so you get a line per direct subfolder instead of every file.
+- `sort -h` sorts by human-readable size, smallest to largest.
+- `2>/dev/null` throws away the "permission denied" noise from folders you can't read.
+
+The biggest folder sits at the bottom. Repeat inside that folder:
+
 ```
-
-Now you know:
-
-```text
-/var
-  ↓
-/var/log
-  ↓
-75 GB
-```
-
-So you investigate `/var/log`.
-
-```bash
 sudo du -h --max-depth=1 /var/log 2>/dev/null | sort -h
 ```
 
-Maybe:
+Two or three iterations and you've found the guilty folder or file.
 
-```text
-500M    /var/log/nginx
-2G      /var/log/app
-72G     /var/log/myapplication
-75G     /var/log
+## ncdu: an interactive alternative
+
+`ncdu` is a scrollable, interactive version of `du`. It isn't installed on this machine by default. On a box with package access you'd add it first:
+
 ```
-
-Now you've found the problem.
-
----
-
-# 12. Understanding the Command
-
-This command looks complicated:
-
-```bash
-sudo du -h --max-depth=1 /var 2>/dev/null | sort -h
-```
-
-But break it into pieces.
-
-### `sudo`
-
-Run with elevated permissions.
-
-Some directories cannot be completely read by normal users.
-
-### `du`
-
-Check disk usage.
-
-### `-h`
-
-Human-readable sizes.
-
-### `--max-depth=1`
-
-Only go **one level deep**.
-
-Without it, you could get thousands of lines.
-
-### `2>/dev/null`
-
-Hide permission-denied errors.
-
-### `|`
-
-Pipe the output to another command.
-
-### `sort -h`
-
-Sort the sizes using human-readable values.
-
-So the overall meaning is:
-
-> "Show me the size of each direct folder under `/var`, sort them by size, and hide permission errors."
-
----
-
-# 13. `ncdu`
-
-There is another useful tool:
-
-```bash
-ncdu
-```
-
-It provides an interactive way to explore disk usage.
-
-Install it:
-
-```bash
 sudo apt install -y ncdu
 ```
 
-Then:
+Then point it at a folder:
 
-```bash
+```
 ncdu /var
 ```
 
-You can navigate through directories using the keyboard.
+Arrow keys drill into folders, and `d` deletes the selected entry. It's faster than repeated `du` calls when you're triaging a full disk under pressure, so it's worth installing on any box you'll be called to debug at odd hours. On an offline machine the install won't reach the package servers, so `du` piped into `sort -h` stays your reliable fallback.
 
-It's useful during production troubleshooting because instead of repeatedly typing `du`, you can interactively drill down.
+## What NOT to do
 
-But remember:
+Never `rm -rf` in `/var` (or anywhere else) based on a hunch. Confirm which files are safe to delete first. Active processes are writing to files right now, and deleting one of those triggers the "df and du disagree" mystery from the last node without actually freeing space.
 
-> If you don't have internet/package access, `ncdu` may not be available.
-
-In that situation:
-
-```bash
-du
-```
-
-is your reliable option.
-
----
-
-# 14. Why Can `df` and `du` Show Different Numbers?
-
-This is a **very important real-world troubleshooting scenario**.
-
-Imagine:
-
-```bash
-df -h
-```
-
-says:
-
-```text
-/dev/sda1   100G   90G   10G   90%   /
-```
-
-But:
-
-```bash
-du -sh /
-```
-
-shows something much smaller.
-
-You think:
-
-> "Where did the missing space go?"
-
-One common reason is a **deleted file that is still open by a running process**.
-
----
-
-# 15. Deleted File Still Open
-
-Imagine your application is writing to:
-
-```text
-/var/log/app.log
-```
-
-The file becomes huge:
-
-```text
-app.log → 20 GB
-```
-
-Someone deletes it:
-
-```bash
-rm app.log
-```
-
-You might expect the 20 GB to immediately become available.
-
-But the application still has the file open.
-
-So:
-
-```text
-Directory
-   ↓
-File deleted
-   ↓
-File no longer visible
-   ↓
-Application still has it open
-   ↓
-Disk space still occupied
-```
-
-Therefore:
-
-```text
-df → still sees the 20 GB
-du → cannot see the deleted file
-```
-
-This creates the classic:
-
-> **"df says 90%, but du says 50%" problem.**
-
-This is a very useful production troubleshooting concept to remember.
-
----
-
-# 16. Complete DevOps Troubleshooting Flow
-
-Imagine you receive an alert:
-
-> **Disk usage is 95%**
-
-Don't immediately delete files.
-
-Follow this process.
-
-### Step 1 — Check filesystem usage
-
-```bash
-df -h
-```
-
-Find the filesystem that is full.
-
-Example:
-
-```text
-/dev/sda1   100G   95G   5G   95%   /
-```
-
-### Step 2 — Find large top-level directories
-
-```bash
-sudo du -h --max-depth=1 / 2>/dev/null | sort -h
-```
-
-Maybe:
-
-```text
-5G     /home
-10G    /opt
-75G    /var
-95G    /
-```
-
-Now investigate `/var`.
-
-### Step 3 — Drill down
-
-```bash
-sudo du -h --max-depth=1 /var 2>/dev/null | sort -h
-```
-
-Maybe:
-
-```text
-2G     /var/lib
-70G    /var/log
-75G    /var
-```
-
-Now investigate `/var/log`.
-
-### Step 4 — Find the actual problem
-
-```bash
-sudo du -h --max-depth=1 /var/log 2>/dev/null | sort -h
-```
-
-Now you might discover that one application's logs are consuming most of the space.
-
-### Step 5 — Don't blindly delete
-
-First understand:
-
-* What generated the files?
-* Is the application still using them?
-* Is log rotation configured?
-* Are the files safe to remove?
-* Is there a retention requirement?
-
----
-
-# ⭐ The Mental Model You Should Remember
-
-### Storage structure
-
-```text
-Disk
- ↓
-Partition
- ↓
-Filesystem
- ↓
-Mount Point
- ↓
-Directories
- ↓
-Files
-```
-
-### Disk troubleshooting
-
-```text
-df
- ↓
-Which filesystem is full?
- ↓
-du
- ↓
-Which directory is consuming space?
- ↓
-du --max-depth=1
- ↓
-Drill down
- ↓
-Find the actual large files/folders
-```
-
-### Three commands to remember first
-
-```bash
-lsblk
-```
-
-**What storage devices/partitions do I have?**
-
-```bash
-df -h
-```
-
-**How full is each filesystem?**
-
-```bash
-du -sh /var/log
-```
-
-**How much space is this directory using?**
-
-And for real troubleshooting:
-
-```bash
-sudo du -h --max-depth=1 /var 2>/dev/null | sort -h
-```
-
-**Which subdirectory is consuming the space?**
-
-If you remember just **`lsblk → df → du`**, you've captured the core of this entire lesson.
