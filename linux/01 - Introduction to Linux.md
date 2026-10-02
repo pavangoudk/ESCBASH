@@ -1,323 +1,193 @@
-# Linux — Notes
+# What is Linux
 
-## What is Linux
+Linux is an operating system, same category as Windows and macOS but built with a different philosophy. It's free, open source, and designed for servers first. Launch a VM on AWS, Azure, or Google Cloud and Linux is the default. Docker, Kubernetes, most CI runners, most production databases, all Linux.
 
-Linux is an operating system, just like Windows and macOS, but it is built around a different philosophy.
+That's why every DevOps job description says "comfortable in Linux." You don't need to be a kernel developer. You need to sit at a Linux machine, look around, read a config, restart a service, and get out. That's the skill.
 
-It is:
-
-- Free
-- Open source
-- Designed primarily for servers
-
-Launch a virtual machine on AWS, Azure, or Google Cloud, and Linux is usually the default. Docker, Kubernetes, most CI runners, and many production databases also run on Linux.
-
-That is why Linux appears in almost every DevOps job description.
-
-You do not need to become a kernel developer. You need to be able to sit at a Linux machine, look around, read a configuration file, restart a service, and move on.
-
-The good news is that you only need a few dozen commands for most day-to-day work—not thousands.
+The good news: the commands you'll use day to day number in the dozens, not thousands. You'll meet most of them in this skill, one at a time.
 
 ## Distributions
 
-Linux is not one single operating system. It is a family of operating systems called **distributions**, or **distros**.
+Linux isn't one thing, it's a family. Ubuntu, Debian, CentOS, Red Hat, Amazon Linux, Alpine, all called **distributions**. They mostly behave the same. This course uses Ubuntu, which is what most cloud VMs default to.
 
-Common distributions include:
+## The shell
 
-- Ubuntu
-- Debian
-- CentOS
-- Red Hat
-- Amazon Linux
-- Alpine
+You interact with Linux through the **shell**, a text program that reads what you type and prints the result. No mouse. On a server, the shell IS the interface.
 
-They mostly work the same way. This course uses Ubuntu because it is a common default for cloud virtual machines.
+Next up, meeting your first shell.
 
-## The Shell
 
-You interact with Linux through the **shell**.
+# Your first commands
 
-The shell is a text-based program that:
+The **shell** reads your commands and runs them. On Ubuntu it's called **bash**. When you land in a shell, it greets you with a prompt:
 
-1. Reads what you type
-2. Runs the command
-3. Prints the result
+```
+root@abc123:~#
+```
 
-There is no mouse involved. On a server, the shell is the interface.
+Read the prompt left to right: `root` is your user, `abc123` is the machine name, `~` is your current folder (shorthand for home), and `#` is the prompt symbol (`#` for root, `$` for a regular user).
 
-On Ubuntu, the shell you will commonly use is called **Bash**.
+## Safe read-only commands
 
-## Your First Commands
+These print information. Nothing to break, so try each one now:
 
-When you enter a shell, it greets you with a prompt that may look like this:
+```
+whoami          # which user are you?
+hostname        # what's this machine called?
+date            # what time does it think it is?
+uname -a        # kernel and architecture details
+echo hello      # print "hello" back at you
+```
 
-`root@abc123:~#`
+## Flags change what a command does
 
-Read it from left to right:
+Most commands accept **flags** (also called options), single letters prefixed with `-`, that change what gets printed:
 
-- `root` is the user
-- `abc123` is the machine name
-- `~` is the current folder, usually the user’s home folder
-- `#` is the prompt symbol for the root user
+```
+uname           # kernel name only (short)
+uname -s        # same as above, explicit form
+uname -a        # everything: kernel, host, version, architecture
+```
 
-A regular user normally sees `$` instead of `#`.
+You'll meet flags on almost every command. When you don't know which flag to use, `--help` after any command usually prints the list.
 
-### Safe, read-only commands
+## Keyboard shortcuts
 
-These commands print information. They do not normally change anything, so they are safe to try:
+Three keystrokes worth learning right now:
 
-- `whoami` — shows which user you are
-- `hostname` — shows the machine name
-- `date` — shows the current date and time
-- `uname -a` — shows kernel and architecture details
-- `echo hello` — prints `hello`
+- **Ctrl+C** - cancel whatever the shell is running.
+- **Ctrl+L** (or type `clear`) - wipe the screen.
+- **Up arrow** - bring back your previous command. Keep pressing to walk further back through history.
 
-These are useful when you first connect to a machine and need to understand where you are.
+Nobody retypes long commands. Everyone reaches for **Up arrow**.
 
-## Flags Change What a Command Does
 
-Most commands accept flags, also called options.
+# pwd, ls, and cat
 
-Flags usually begin with a hyphen and change what the command displays or how it behaves.
+Three commands answer the three most common questions about a Linux machine: where am I, what's in this folder, and what's inside this file?
 
-For example:
+## pwd: print the current folder
 
-- `uname` — prints the kernel name
-- `uname -s` — explicitly asks for the kernel name
-- `uname -a` — prints everything: kernel, host, version, and architecture
+When you log in, the shell drops you into a folder called your **home folder**. For the root user that's `/root`; for a user named `alice` it's `/home/alice`. The shell always keeps track of which folder you are standing in, called your **current folder**.
 
-You will use flags with almost every command.
+```
+pwd
+```
 
-When you do not know which flags are available, add `--help` after the command. It usually prints the command’s usage information.
+`pwd` prints the current folder as a full path. Run it now and you will see something like `/root`.
 
-## Keyboard Shortcuts
+Any command you type acts on files in your current folder unless you give it a full path (starting with `/`).
 
-There are three keyboard shortcuts worth learning immediately.
+## ls: list a folder's contents
 
-### `Ctrl+C`
+`ls` lists the entries in a folder.
 
-Cancels whatever the shell is currently running.
+```
+ls              # entries in the current folder
+ls /            # entries at the top of the filesystem
+ls /etc         # entries in /etc
+```
 
-### `Ctrl+L`
+Give `ls` no argument and you get the current folder. Give it a path and you get the contents of that folder.
 
-Clears the screen.
+## cat: print a file's contents
 
-You can also type `clear`.
+`cat` prints a file's contents to the screen.
 
-### Up Arrow
+```
+cat /etc/hostname          # the machine's name, as stored on disk
+cat /etc/os-release        # which Linux distribution and version
+```
 
-Brings back your previous command.
+Great for short text files. Longer files have better tools, covered in a later topic.
 
-Keep pressing Up to move further back through your command history.
+## Tab completion
 
-Nobody retypes long commands if they can avoid it. Everyone uses the Up arrow.
+Type part of a command or path, press **Tab**, and the shell finishes it for you. Typing `who` and pressing Tab becomes `whoami`. Typing `cat /et` and pressing Tab becomes `cat /etc/`. Press Tab twice when multiple things match to see the options.
 
-## `pwd`, `ls`, and `cat`
+Learn this now. It saves keystrokes and prevents typos in long paths.
 
-These three commands answer three common questions:
 
-1. Where am I?
-2. What is in this folder?
-3. What is inside this file?
 
-## `pwd`: Print the Current Folder
+# mkdir and cd
 
-`pwd` means **print working directory**.
+Two commands you will use many times a day: `mkdir` creates a directory, `cd` moves you into the directory.
 
-When you log in, the shell places you in a folder called your home folder:
+## mkdir: create a directory
 
-- For the root user: `/root`
-- For a user named Alice: `/home/alice`
+```
+mkdir notes                     # create a directory in the current directory
+mkdir /root/projects            # create at an absolute path
+```
 
-Run:
+Plain `mkdir` fails if the parent folder doesn't already exist. `mkdir -p` creates every missing parent along the way:
 
-`pwd`
+```
+mkdir -p /root/projects/api/src
+```
 
-It prints the full path of the folder you are currently standing in.
+That creates `projects`, then `projects/api`, then `projects/api/src`, even if none of them existed before. `-p` also stays quiet if the directory is already there, which makes it safe to run twice.
 
-Any command you run acts on files in your current folder unless you provide a full path.
+## cd: change your current directory
 
-## `ls`: List a Folder’s Contents
+```
+cd /etc                # jump to /etc using an absolute path
+cd notes               # step into the `notes` directory in your current folder
+cd ..                  # move up one level to the parent directory
+cd ~                   # jump to your home folder
+cd                     # bare cd is the same as cd ~
+```
 
-`ls` lists the files and folders in a directory.
+After `cd`, `pwd` will show the new location, and any command you run from there acts on that folder unless you say otherwise. `cd` is the single most-used navigation command in Linux.
 
-Examples:
+## The typical workflow
 
-- `ls` — lists the current folder
-- `ls /` — lists the top level of the filesystem
-- `ls /etc` — lists the contents of `/etc`
+Create a folder, move into it, work there:
 
-Give `ls` no argument and it lists the current folder. Give it a path and it lists that folder instead.
+```
+mkdir notes
+cd notes
+# ...do things here...
+```
 
-## `cat`: Print a File’s Contents
+A bare `cd` takes you back home:
 
-`cat` prints the contents of a file to the screen.
+```
+cd
+```
 
-Examples:
 
-- `cat /etc/hostname` — shows the machine name stored on disk
-- `cat /etc/os-release` — shows the Linux distribution and version
+# Redirecting output with >
 
-`cat` is useful for short text files. Longer files need better tools, which you will meet later.
+By default, a command prints to your screen. The `>` operator sends that output into a file instead.
 
-## Tab Completion
+## The > operator
 
-Type part of a command or path and press Tab. The shell will try to finish it for you.
+```
+whoami > user.txt         # write your username into user.txt
+hostname > host.txt       # write the machine name into host.txt
+date > when.txt           # write the current date and time
+```
 
-For example:
+If the file doesn't exist, `>` creates it. If the file already exists, `>` **overwrites** it (the previous contents are gone).
 
-- Type `who` and press Tab. It may become `whoami`.
-- Type `cat /et` and press Tab. It may become `cat /etc/`.
+## Reading the file back
 
-If more than one option matches, press Tab twice to see the available choices.
+Use `cat` to see what got saved:
 
-Learn this early. Tab completion saves keystrokes and prevents typos in long paths.
-
-## `mkdir` and `cd`
-
-Two commands you will use many times a day are:
-
-- `mkdir` — creates a directory
-- `cd` — moves into a directory
-
-## `mkdir`: Create a Directory
-
-Use `mkdir` to create a new directory.
-
-Examples:
-
-- `mkdir notes` — creates a directory called `notes` in the current folder
-- `mkdir /root/projects` — creates a directory at an absolute path
-
-A normal `mkdir` command fails if the parent folder does not already exist.
-
-Use `mkdir -p` to create every missing parent directory along the way.
-
-For example:
-
-`mkdir -p /root/projects/api/src`
-
-This creates:
-
-1. `/root/projects`
-2. `/root/projects/api`
-3. `/root/projects/api/src`
-
-The `-p` flag also stays quiet if the directory already exists, so it is safe to run the command twice.
-
-## `cd`: Change Your Current Directory
-
-Use `cd` to move between directories.
-
-Examples:
-
-- `cd /etc` — moves to `/etc`
-- `cd notes` — moves into the `notes` folder in the current directory
-- `cd ..` — moves up one level
-- `cd ~` — moves to your home folder
-- `cd` — also moves to your home folder
-
-After using `cd`, run `pwd` to confirm your new location.
-
-From that point on, commands act on the new current folder unless you provide another path.
-
-`cd` is the single most-used navigation command in Linux.
-
-## The Typical Workflow
-
-A common Linux workflow looks like this:
-
-1. Create a folder.
-2. Move into it.
-3. Work there.
-4. Return home when finished.
-
-For example:
-
-`mkdir notes`
-
-`cd notes`
-
-Do your work inside the folder.
-
-To return home, run:
-
-`cd`
-
-## Redirecting Output with `>`
-
-By default, a command prints its output to the screen.
-
-The `>` operator sends that output into a file instead.
-
-Examples:
-
-- `whoami > user.txt`
-- `hostname > host.txt`
-- `date > when.txt`
-
-If the file does not exist, Linux creates it.
-
-If the file already exists, `>` overwrites it. The previous contents are gone.
-
-That makes `>` useful, but something to use carefully.
-
-## Reading the File Back
-
-Use `cat` to see what was saved:
-
-`cat user.txt`
+```
+cat user.txt
+```
 
 You should see exactly what the original command printed.
 
-For example, if you ran:
+## Relative names after cd
 
-`whoami > user.txt`
+Once you `cd` into a folder, a plain filename like `user.txt` lands in that folder. Full paths always work too, regardless of where you are standing:
 
-then `cat user.txt` displays the username.
+```
+whoami > /root/answers/user.txt
+```
 
-## Relative Names After `cd`
-
-Once you move into a folder, a plain filename is created in that folder.
-
-For example, if you are in `/root/answers` and run:
-
-`whoami > user.txt`
-
-the file is created at:
-
-`/root/answers/user.txt`
-
-You can also use the full path:
-
-`whoami > /root/answers/user.txt`
-
-Both styles work.
-
-- A relative filename is shorter when you are already in the right folder.
-- A full path is safer when you are not sure where you are.
-
-## The Main Idea
-
-Linux work begins with a few basic questions:
-
-- Who am I?
-- What machine am I on?
-- Where am I?
-- What is in this folder?
-- What is inside this file?
-- Where should I create the next file or directory?
-
-The commands in this lesson answer those questions:
-
-- `whoami`
-- `hostname`
-- `pwd`
-- `ls`
-- `cat`
-- `mkdir`
-- `cd`
-- `>`
-
-Learn these commands well. They are the foundation for everything that comes next.
+Both styles produce the same result. The relative name is shorter when you are already in the right folder; the full path is safer when you are not sure where you are.
 
